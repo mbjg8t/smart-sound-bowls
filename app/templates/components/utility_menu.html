@@ -1,0 +1,69 @@
+<div class="utility-menu">
+
+    <button class="utility-menu-button">
+        UTILITIES ▾
+    </button>
+
+    <div class="utility-menu-content">
+
+        <div class="utility-submenu">
+
+            <button class="utility-submenu-button">
+                HARDWARE ▸
+            </button>
+
+            <div class="utility-submenu-content">
+
+                <button onclick="openUtilityWindow(
+                    '/utilities/audio',
+                    'pcm5122',
+                    900,
+                    760
+                )">
+                    PCM5122 DAC
+                </button>
+
+                <button onclick="openUtilityWindow(
+                    '/utilities/microphone',
+                    'inmp441',
+                    900,
+                    760
+                )">
+                    INMP441 MICROPHONE
+                </button>
+
+                <button onclick="openUtilityWindow(
+                    '/utilities/adxl345',
+                    'adxl345',
+                    1100,
+                    850
+                )">
+                    ADXL345 ACCELEROMETER
+                </button>
+
+                <button onclick="openUtilityWindow(
+                    '/utilities/system',
+                    'system',
+                    1000,
+                    780
+                )">
+                    ALSA / SYSTEM
+                </button>
+
+            </div>
+
+        </div>
+
+        <div class="utility-menu-divider"></div>
+
+        <button disabled>
+            SIGNAL GENERATOR
+        </button>
+
+        <button disabled>
+            RESONANCE ANALYZER
+        </button>
+
+    </div>
+
+</div>

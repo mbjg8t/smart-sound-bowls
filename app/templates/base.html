@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1"
+    >
+
+    <title>
+        {% block title %}
+        Smart Sound Bowls
+        {% endblock %}
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='css/main.css') }}"
+    >
+
+</head>
+
+<body>
+
+<header class="topbar">
+
+    <div>
+        <div class="brand">
+            SMART SOUND BOWLS
+        </div>
+
+        <div class="subtitle">
+            Resonant Driver Control System
+        </div>
+    </div>
+
+    <div class="system-pill">
+        <span class="status-dot"></span>
+        <span id="header-status">
+            {{ state.system_status if state else "READY" }}
+        </span>
+    </div>
+
+</header>
+
+
+<nav class="navigation">
+
+    <a href="/">
+        Main
+    </a>
+
+    {% include "components/utility_menu.html" %}
+
+</nav>
+
+
+<main class="page">
+
+    {% block content %}
+    {% endblock %}
+
+</main>
+
+
+<script src="{{ url_for('static', filename='js/common.js') }}"></script>
+
+{% block scripts %}
+{% endblock %}
+
+</body>
+
+</html>

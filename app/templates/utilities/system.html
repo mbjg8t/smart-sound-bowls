@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}
+System | Smart Sound Bowls
+{% endblock %}
+
+
+{% block content %}
+
+<div class="page-heading">
+
+    <div>
+
+        <h1>
+            Hardware System
+        </h1>
+
+        <p>
+            Raspberry Pi audio hardware discovery.
+        </p>
+
+    </div>
+
+</div>
+
+
+<section class="card">
+
+    <div class="card-title">
+        ALSA HARDWARE
+    </div>
+
+    <button
+        class="button button-secondary"
+        onclick="scanHardware()"
+    >
+        SCAN HARDWARE
+    </button>
+
+    <pre
+        id="hardware-output"
+        style="
+            margin-top:20px;
+            white-space:pre-wrap;
+            overflow:auto;
+        "
+    >Waiting for scan...</pre>
+
+</section>
+
+{% endblock %}
+
+
+{% block scripts %}
+
+<script>
+
+async function scanHardware() {
+
+    const output =
+        document.getElementById("hardware-output");
+
+    output.textContent =
+        "Scanning ALSA hardware...";
+
+    try {
+
+        const response =
+            await fetch("/api/hardware/alsa");
+
+        const result =
+            await response.json();
+
+        output.textContent =
+            JSON.stringify(
+                result,
+                null,
+                2
+            );
+
+    } catch (error) {
+
+        output.textContent =
+            String(error);
+
+    }
+
+}
+
+scanHardware();
+
+</script>
+
+{% endblock %}

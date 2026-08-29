@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+
+{% block title %}
+Smart Sound Bowls
+{% endblock %}
+
+
+{% block content %}
+
+<div class="page-heading">
+
+    <div>
+        <h1>
+            Bowl Driver
+        </h1>
+
+        <p>
+            Main control and live system status.
+        </p>
+    </div>
+
+</div>
+
+
+<div class="dashboard-grid">
+
+
+    <section class="card">
+
+        <div class="card-title">
+            OUTPUT
+        </div>
+
+        <div class="big-value" id="output-state">
+            {{ "RUNNING" if state.output_running else "STOPPED" }}
+        </div>
+
+        <div class="button-row">
+
+            <button
+                class="button button-start"
+                onclick="startAudio()"
+            >
+                START
+            </button>
+
+            <button
+                class="button button-stop"
+                onclick="stopAudio()"
+            >
+                STOP
+            </button>
+
+        </div>
+
+    </section>
+
+
+    <section class="card">
+
+        <div class="card-title">
+            DRIVE
+        </div>
+
+        <div class="metric">
+
+            <span>
+                Frequency
+            </span>
+
+            <strong id="frequency-value">
+                {{ "%.2f"|format(state.frequency_hz) }} Hz
+            </strong>
+
+        </div>
+
+
+        <div class="metric">
+
+            <span>
+                Amplitude
+            </span>
+
+            <strong id="amplitude-value">
+                {{ "%.1f"|format(state.amplitude * 100) }} %
+            </strong>
+
+        </div>
+
+
+        <div class="metric">
+
+            <span>
+                Waveform
+            </span>
+
+            <strong id="waveform-value">
+                {{ state.waveform }}
+            </strong>
+
+        </div>
+
+    </section>
+
+
+    <section class="card">
+
+        <div class="card-title">
+            BOWL FEEDBACK
+        </div>
+
+        <div class="metric">
+
+            <span>
+                Microphone
+            </span>
+
+            <strong id="mic-state">
+                {{ "ON" if state.mic_enabled else "OFF" }}
+            </strong>
+
+        </div>
+
+
+        <div class="metric">
+
+            <span>
+                Detected Frequency
+            </span>
+
+            <strong>
+                --
+            </strong>
+
+        </div>
+
+
+        <div class="metric">
+
+            <span>
+                Resonance
+            </span>
+
+            <strong>
+                --
+            </strong>
+
+        </div>
+
+    </section>
+
+
+    <section class="card">
+
+        <div class="card-title">
+            HARDWARE
+        </div>
+
+        <div class="metric">
+
+            <span>
+                Audio Backend
+            </span>
+
+            <strong>
+                {{ state.hardware_mode }}
+            </strong>
+
+        </div>
+
+
+        <div class="metric">
+
+            <span>
+                DAC
+            </span>
+
+            <strong>
+                PCM5122
+            </strong>
+
+        </div>
+
+
+        <div class="metric">
+
+            <span>
+                Microphone
+            </span>
+
+            <strong>
+                INMP441
+            </strong>
+
+        </div>
+
+    </section>
+
+
+</div>
+
+
+
+{% endblock %}
+
+
+{% block scripts %}
+
+<script>
+
+async function startAudio() {
+
+    await apiPost("/api/audio/start");
+
+    await refreshState();
+
+}
+
+
+async function stopAudio() {
+
+    await apiPost("/api/audio/stop");
+
+    await refreshState();
+
+}
+
+
+async function refreshState() {
+
+    const response = await fetch("/api/state");
+
+    const state = await response.json();
+
+    document.getElementById("output-state").textContent =
+        state.output_running ? "RUNNING" : "STOPPED";
+
+    document.getElementById("frequency-value").textContent =
+        Number(state.frequency_hz).toFixed(2) + " Hz";
+
+    document.getElementById("amplitude-value").textContent =
+        (Number(state.amplitude) * 100).toFixed(1) + " %";
+
+    document.getElementById("waveform-value").textContent =
+        state.waveform;
+
+}
+
+
+setInterval(refreshState, 1000);
+
+</script>
+
+{% endblock %}

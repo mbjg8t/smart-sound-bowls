@@ -1,0 +1,1400 @@
+{% extends "base.html" %}
+
+{% block title %}ADXL345 Accelerometer{% endblock %}
+
+{% block content %}
+
+<style>
+.adxl-page {
+    padding: 22px;
+    max-width: 1250px;
+    margin: 0 auto;
+}
+
+.adxl-page h1 {
+    margin-top: 0;
+}
+
+.adxl-note {
+    color: #aab8c7;
+    margin-bottom: 22px;
+}
+
+.adxl-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(300px, 1fr));
+    gap: 16px;
+}
+
+.adxl-card {
+    background: #18212b;
+    border: 1px solid #303b47;
+    border-radius: 12px;
+    padding: 18px;
+}
+
+.adxl-wide {
+    grid-column: 1 / -1;
+}
+
+.adxl-card h2 {
+    margin-top: 0;
+}
+
+.status-grid,
+.axis-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.metric {
+    background: #10171f;
+    border: 1px solid #303b47;
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.metric-label {
+    display: block;
+    color: #91a4b7;
+    font-size: 12px;
+    margin-bottom: 5px;
+}
+
+.metric-value {
+    font-size: 20px;
+    font-weight: bold;
+}
+
+.controls {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(120px, 1fr));
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.controls label {
+    color: #9fb0c1;
+    font-size: 13px;
+}
+
+.controls input {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    margin-top: 5px;
+    padding: 9px;
+    background: #0e151d;
+    color: white;
+    border: 1px solid #36414c;
+    border-radius: 6px;
+}
+
+.adxl-button {
+    padding: 9px 16px;
+    margin-right: 8px;
+    cursor: pointer;
+}
+
+.adxl-button:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.primary {
+    background: #18883a;
+    color: white;
+    border: 0;
+    border-radius: 6px;
+}
+
+.secondary {
+    background: #253341;
+    color: white;
+    border: 1px solid #465564;
+    border-radius: 6px;
+}
+
+#sweep-status {
+    margin: 14px 0;
+    font-weight: bold;
+}
+
+.chart-container {
+    background: #0d141b;
+    border: 1px solid #303b47;
+    border-radius: 8px;
+    padding: 10px;
+    margin: 15px 0;
+}
+
+#response-chart {
+    display: block;
+    width: 100%;
+    height: 380px;
+}
+
+.chart-legend {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    color: #aebdca;
+    font-size: 13px;
+    margin-top: 6px;
+}
+
+.table-wrap {
+    max-height: 420px;
+    overflow: auto;
+    border: 1px solid #303b47;
+    margin-top: 15px;
+}
+
+#sweep-results {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+#sweep-results th,
+#sweep-results td {
+    padding: 7px 10px;
+    border-bottom: 1px solid #29333d;
+    text-align: right;
+}
+
+#sweep-results th:first-child,
+#sweep-results td:first-child {
+    text-align: left;
+}
+
+#sweep-results th {
+    position: sticky;
+    top: 0;
+    background: #18212b;
+}
+
+.result-box {
+    background: #0d141b;
+    border: 1px solid #303b47;
+    border-radius: 8px;
+    padding: 12px;
+    min-height: 25px;
+    overflow: auto;
+}
+
+.peak-box {
+    margin-top: 16px;
+}
+
+@media (max-width: 800px) {
+    .adxl-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .status-grid,
+    .axis-grid,
+    .controls {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+</style>
+
+
+<div class="adxl-page">
+
+    <h1>ADXL345 Accelerometer</h1>
+
+    <p class="adxl-note">
+        SPI vibration measurement and exciter response testing.
+        Sensor currently mounted directly on the exciter.
+        Measurements represent exciter/mechanical response, not bowl resonance.
+    </p>
+
+
+    <div class="adxl-grid">
+
+        <section class="adxl-card">
+
+            <h2>Sensor Status</h2>
+
+            <div class="status-grid">
+
+                <div class="metric">
+                    <span class="metric-label">
+                        Status
+                    </span>
+                    <span class="metric-value"
+                          id="sensor-status">
+                        Checking...
+                    </span>
+                </div>
+
+                <div class="metric">
+                    <span class="metric-label">
+                        Device ID
+                    </span>
+                    <span class="metric-value"
+                          id="device-id">
+                        --
+                    </span>
+                </div>
+
+                <div class="metric">
+                    <span class="metric-label">
+                        SPI
+                    </span>
+                    <span class="metric-value"
+                          id="spi-device">
+                        --
+                    </span>
+                </div>
+
+            </div>
+
+            <button class="adxl-button secondary"
+                    onclick="refreshSensorStatus()">
+                Refresh
+            </button>
+
+        </section>
+
+
+        <section class="adxl-card">
+
+            <h2>Live Acceleration</h2>
+
+            <div class="axis-grid">
+
+                <div class="metric">
+                    <span class="metric-label">X</span>
+                    <span class="metric-value"
+                          id="axis-x">--</span>
+                    g
+                </div>
+
+                <div class="metric">
+                    <span class="metric-label">Y</span>
+                    <span class="metric-value"
+                          id="axis-y">--</span>
+                    g
+                </div>
+
+                <div class="metric">
+                    <span class="metric-label">Z</span>
+                    <span class="metric-value"
+                          id="axis-z">--</span>
+                    g
+                </div>
+
+                <div class="metric">
+                    <span class="metric-label">|G|</span>
+                    <span class="metric-value"
+                          id="axis-total">--</span>
+                    g
+                </div>
+
+            </div>
+
+            <button id="live-button"
+                    class="adxl-button primary"
+                    onclick="toggleLive()">
+                Start Live
+            </button>
+
+        </section>
+
+
+        <section class="adxl-card adxl-wide">
+
+            <h2>Exciter Vibration Test</h2>
+
+            <div class="controls">
+
+                <label>
+                    Frequency (Hz)
+                    <input id="test-frequency"
+                           type="number"
+                           value="220"
+                           min="20"
+                           max="1000">
+                </label>
+
+                <label>
+                    Drive (%)
+                    <input id="test-amplitude"
+                           type="number"
+                           value="0.1"
+                           min="0.01"
+                           max="5"
+                           step="0.01">
+                </label>
+
+                <label>
+                    Duration (sec)
+                    <input id="test-duration"
+                           type="number"
+                           value="1"
+                           min="0.25"
+                           max="10"
+                           step="0.25">
+                </label>
+
+            </div>
+
+            <button id="vibration-button"
+                    class="adxl-button primary"
+                    onclick="runVibrationTest()">
+                Run Test
+            </button>
+
+            <pre id="vibration-result"
+                 class="result-box"></pre>
+
+        </section>
+
+
+        <section class="adxl-card adxl-wide">
+
+            <h2>Exciter Response Sweep</h2>
+
+            <p class="adxl-note">
+                Frequency response measured directly at the exciter.
+            </p>
+
+            <div class="controls">
+
+                <label>
+                    Start (Hz)
+                    <input id="sweep-start"
+                           type="number"
+                           value="80">
+                </label>
+
+                <label>
+                    Stop (Hz)
+                    <input id="sweep-stop"
+                           type="number"
+                           value="380">
+                </label>
+
+                <label>
+                    Step (Hz)
+                    <input id="sweep-step"
+                           type="number"
+                           value="5">
+                </label>
+
+                <label>
+                    Drive (%)
+                    <input id="sweep-amplitude"
+                           type="number"
+                           value="0.1"
+                           step="0.01">
+                </label>
+
+                <label>
+                    Settle (sec)
+                    <input id="sweep-settle"
+                           type="number"
+                           value="0.05"
+                           step="0.01">
+                </label>
+
+                <label>
+                    Measure (sec)
+                    <input id="sweep-measure"
+                           type="number"
+                           value="0.15"
+                           step="0.01">
+                </label>
+
+            </div>
+
+            <button id="sweep-button"
+                    class="adxl-button primary"
+                    onclick="runSweep(false)">
+                Start Sweep
+            </button>
+
+            <button id="peak-button"
+                    class="adxl-button secondary"
+                    onclick="findPeak()">
+                Find Peak
+            </button>
+
+            <div id="sweep-status">
+                Ready
+            </div>
+
+
+            <div class="chart-container">
+
+                <canvas id="response-chart"></canvas>
+
+                <div class="chart-legend">
+                    <span>Response = thick trace</span>
+                    <span>X / Y / Z = axis traces</span>
+                    <span>Peak = vertical marker</span>
+                </div>
+
+            </div>
+
+
+            <div class="peak-box">
+
+                <h3>Strongest Responses</h3>
+
+                <pre id="sweep-peaks"
+                     class="result-box">
+No sweep data yet.
+                </pre>
+
+            </div>
+
+
+            <div class="table-wrap">
+
+                <table id="sweep-results">
+
+                    <thead>
+                        <tr>
+                            <th>Hz</th>
+                            <th>Response g</th>
+                            <th>X</th>
+                            <th>Y</th>
+                            <th>Z</th>
+                            <th>Max g</th>
+                        </tr>
+                    </thead>
+
+                    <tbody></tbody>
+
+                </table>
+
+            </div>
+
+        </section>
+
+    </div>
+
+</div>
+
+
+<script>
+
+let liveTimer = null;
+let lastSweepResults = [];
+
+
+function stopLive() {
+
+    if (!liveTimer) {
+        return;
+    }
+
+    clearInterval(liveTimer);
+    liveTimer = null;
+
+    document.getElementById(
+        "live-button"
+    ).textContent = "Start Live";
+}
+
+
+async function refreshSensorStatus() {
+
+    try {
+
+        const response = await fetch(
+            "/api/hardware/adxl345"
+        );
+
+        const data = await response.json();
+
+        document.getElementById(
+            "sensor-status"
+        ).textContent =
+            data.found
+                ? "Detected ✓"
+                : "Not detected";
+
+        document.getElementById(
+            "device-id"
+        ).textContent =
+            "0x" +
+            Number(
+                data.device_id || 0
+            )
+            .toString(16)
+            .toUpperCase();
+
+        document.getElementById(
+            "spi-device"
+        ).textContent =
+            data.spi || "--";
+
+    } catch (error) {
+
+        document.getElementById(
+            "sensor-status"
+        ).textContent = "Error";
+    }
+}
+
+
+async function readAcceleration() {
+
+    try {
+
+        const response = await fetch(
+            "/api/hardware/adxl345/sample"
+        );
+
+        const data = await response.json();
+
+        if (!data.ok) {
+            return;
+        }
+
+        document.getElementById(
+            "axis-x"
+        ).textContent =
+            data.x.toFixed(4);
+
+        document.getElementById(
+            "axis-y"
+        ).textContent =
+            data.y.toFixed(4);
+
+        document.getElementById(
+            "axis-z"
+        ).textContent =
+            data.z.toFixed(4);
+
+        document.getElementById(
+            "axis-total"
+        ).textContent =
+            data.total.toFixed(4);
+
+    } catch (error) {
+
+        console.error(error);
+    }
+}
+
+
+function toggleLive() {
+
+    const button =
+        document.getElementById(
+            "live-button"
+        );
+
+    if (liveTimer) {
+
+        stopLive();
+        return;
+    }
+
+    readAcceleration();
+
+    liveTimer = setInterval(
+        readAcceleration,
+        200
+    );
+
+    button.textContent =
+        "Stop Live";
+}
+
+
+async function runVibrationTest() {
+
+    stopLive();
+
+    const button =
+        document.getElementById(
+            "vibration-button"
+        );
+
+    const output =
+        document.getElementById(
+            "vibration-result"
+        );
+
+    button.disabled = true;
+    output.textContent = "Running...";
+
+    const payload = {
+
+        frequency:
+            parseFloat(
+                document.getElementById(
+                    "test-frequency"
+                ).value
+            ),
+
+        amplitude_percent:
+            parseFloat(
+                document.getElementById(
+                    "test-amplitude"
+                ).value
+            ),
+
+        duration:
+            parseFloat(
+                document.getElementById(
+                    "test-duration"
+                ).value
+            )
+    };
+
+    try {
+
+        const response = await fetch(
+            "/api/hardware/adxl345/vibration-test",
+            {
+                method: "POST",
+
+                headers: {
+                    "Content-Type":
+                        "application/json"
+                },
+
+                body:
+                    JSON.stringify(payload)
+            }
+        );
+
+        const data =
+            await response.json();
+
+        if (!data.ok) {
+
+            output.textContent =
+                data.error ||
+                "Test failed";
+
+        } else {
+
+            output.textContent =
+                "Frequency : " +
+                data.frequency_hz +
+                " Hz\n" +
+
+                "Response  : " +
+                data.vector_amp_g.toFixed(4) +
+                " g\n" +
+
+                "X         : " +
+                data.amp_x_g.toFixed(4) +
+                " g\n" +
+
+                "Y         : " +
+                data.amp_y_g.toFixed(4) +
+                " g\n" +
+
+                "Z         : " +
+                data.amp_z_g.toFixed(4) +
+                " g\n" +
+
+                "Max       : " +
+                data.max_abs_g.toFixed(2) +
+                " g";
+        }
+
+    } catch (error) {
+
+        output.textContent =
+            "Error: " + error;
+    }
+
+    button.disabled = false;
+}
+
+
+function sweepPayload() {
+
+    return {
+
+        start_hz:
+            parseFloat(
+                document.getElementById(
+                    "sweep-start"
+                ).value
+            ),
+
+        stop_hz:
+            parseFloat(
+                document.getElementById(
+                    "sweep-stop"
+                ).value
+            ),
+
+        step_hz:
+            parseFloat(
+                document.getElementById(
+                    "sweep-step"
+                ).value
+            ),
+
+        amplitude_percent:
+            parseFloat(
+                document.getElementById(
+                    "sweep-amplitude"
+                ).value
+            ),
+
+        settle_seconds:
+            parseFloat(
+                document.getElementById(
+                    "sweep-settle"
+                ).value
+            ),
+
+        measure_seconds:
+            parseFloat(
+                document.getElementById(
+                    "sweep-measure"
+                ).value
+            )
+    };
+}
+
+
+async function requestSweep(payload) {
+
+    const response = await fetch(
+        "/api/hardware/adxl345/sweep",
+        {
+            method: "POST",
+
+            headers: {
+                "Content-Type":
+                    "application/json"
+            },
+
+            body:
+                JSON.stringify(payload)
+        }
+    );
+
+    return await response.json();
+}
+
+
+function displaySweep(data) {
+
+    lastSweepResults =
+        data.results || [];
+
+    const tbody =
+        document.querySelector(
+            "#sweep-results tbody"
+        );
+
+    const peaks =
+        document.getElementById(
+            "sweep-peaks"
+        );
+
+    tbody.innerHTML = "";
+
+    lastSweepResults.forEach(row => {
+
+        const tr =
+            document.createElement("tr");
+
+        tr.innerHTML = `
+            <td>${row.frequency_hz}</td>
+            <td>${row.vector_amp_g.toFixed(4)}</td>
+            <td>${row.amp_x_g.toFixed(4)}</td>
+            <td>${row.amp_y_g.toFixed(4)}</td>
+            <td>${row.amp_z_g.toFixed(4)}</td>
+            <td>${row.max_abs_g.toFixed(2)}</td>
+        `;
+
+        tbody.appendChild(tr);
+    });
+
+
+    peaks.textContent =
+        data.peaks.map(
+            (p, i) =>
+                `${i + 1}. ` +
+                `${p.frequency_hz} Hz   ` +
+                `${p.vector_amp_g.toFixed(4)} g`
+        ).join("\n");
+
+
+    drawResponseChart(
+        lastSweepResults
+    );
+}
+
+
+async function runSweep(
+    preserveStatus = false
+) {
+
+    stopLive();
+
+    const button =
+        document.getElementById(
+            "sweep-button"
+        );
+
+    const peakButton =
+        document.getElementById(
+            "peak-button"
+        );
+
+    const status =
+        document.getElementById(
+            "sweep-status"
+        );
+
+    button.disabled = true;
+    peakButton.disabled = true;
+
+    if (!preserveStatus) {
+        status.textContent =
+            "Sweep running...";
+    }
+
+    try {
+
+        const data =
+            await requestSweep(
+                sweepPayload()
+            );
+
+        if (!data.ok) {
+
+            status.textContent =
+                data.error ||
+                "Sweep failed";
+
+            return null;
+        }
+
+        displaySweep(data);
+
+        if (!preserveStatus) {
+
+            status.textContent =
+                `Complete — ` +
+                `${data.results.length} ` +
+                `frequencies tested`;
+        }
+
+        return data;
+
+    } catch (error) {
+
+        status.textContent =
+            "Error: " + error;
+
+        return null;
+
+    } finally {
+
+        button.disabled = false;
+        peakButton.disabled = false;
+    }
+}
+
+
+async function findPeak() {
+
+    stopLive();
+
+    const button =
+        document.getElementById(
+            "sweep-button"
+        );
+
+    const peakButton =
+        document.getElementById(
+            "peak-button"
+        );
+
+    const status =
+        document.getElementById(
+            "sweep-status"
+        );
+
+    button.disabled = true;
+    peakButton.disabled = true;
+
+    const original =
+        sweepPayload();
+
+    try {
+
+        status.textContent =
+            "Find Peak: coarse scan...";
+
+        const coarse =
+            await requestSweep(
+                original
+            );
+
+        if (!coarse.ok) {
+
+            status.textContent =
+                coarse.error ||
+                "Coarse scan failed";
+
+            return;
+        }
+
+        const strongest =
+            coarse.peaks[0];
+
+        const center =
+            strongest.frequency_hz;
+
+        const fineStart =
+            Math.max(
+                original.start_hz,
+                center - 10
+            );
+
+        const fineStop =
+            Math.min(
+                original.stop_hz,
+                center + 10
+            );
+
+        status.textContent =
+            `Find Peak: fine scan ` +
+            `${fineStart}-${fineStop} Hz...`;
+
+        const finePayload = {
+            ...original,
+            start_hz: fineStart,
+            stop_hz: fineStop,
+            step_hz: 1
+        };
+
+        const fine =
+            await requestSweep(
+                finePayload
+            );
+
+        if (!fine.ok) {
+
+            status.textContent =
+                fine.error ||
+                "Fine scan failed";
+
+            return;
+        }
+
+        displaySweep(fine);
+
+        const peak =
+            fine.peaks[0];
+
+        status.textContent =
+            `Peak found: ` +
+            `${peak.frequency_hz} Hz  ` +
+            `${peak.vector_amp_g.toFixed(4)} g`;
+
+        document.getElementById(
+            "test-frequency"
+        ).value =
+            peak.frequency_hz;
+
+    } catch (error) {
+
+        status.textContent =
+            "Error: " + error;
+
+    } finally {
+
+        button.disabled = false;
+        peakButton.disabled = false;
+    }
+}
+
+
+function drawResponseChart(results) {
+
+    const canvas =
+        document.getElementById(
+            "response-chart"
+        );
+
+    const rect =
+        canvas.getBoundingClientRect();
+
+    const dpr =
+        window.devicePixelRatio || 1;
+
+    canvas.width =
+        Math.max(
+            500,
+            Math.floor(
+                rect.width * dpr
+            )
+        );
+
+    canvas.height =
+        Math.floor(
+            380 * dpr
+        );
+
+    const ctx =
+        canvas.getContext("2d");
+
+    ctx.scale(dpr, dpr);
+
+    const width =
+        canvas.width / dpr;
+
+    const height =
+        canvas.height / dpr;
+
+    ctx.clearRect(
+        0,
+        0,
+        width,
+        height
+    );
+
+    if (!results.length) {
+
+        ctx.fillStyle = "#8193a5";
+        ctx.font = "14px sans-serif";
+
+        ctx.fillText(
+            "Run a sweep to display response.",
+            20,
+            30
+        );
+
+        return;
+    }
+
+
+    const margin = {
+        left: 58,
+        right: 20,
+        top: 25,
+        bottom: 45
+    };
+
+
+    const plotWidth =
+        width -
+        margin.left -
+        margin.right;
+
+    const plotHeight =
+        height -
+        margin.top -
+        margin.bottom;
+
+
+    const minHz =
+        Math.min(
+            ...results.map(
+                r => r.frequency_hz
+            )
+        );
+
+    const maxHz =
+        Math.max(
+            ...results.map(
+                r => r.frequency_hz
+            )
+        );
+
+
+    const maxG =
+        Math.max(
+            ...results.map(
+                r => Math.max(
+                    r.vector_amp_g,
+                    r.amp_x_g,
+                    r.amp_y_g,
+                    r.amp_z_g
+                )
+            )
+        ) * 1.1;
+
+
+    function xScale(hz) {
+
+        if (maxHz === minHz) {
+            return margin.left;
+        }
+
+        return (
+            margin.left +
+            (
+                (hz - minHz) /
+                (maxHz - minHz)
+            ) *
+            plotWidth
+        );
+    }
+
+
+    function yScale(g) {
+
+        return (
+            margin.top +
+            plotHeight -
+            (
+                g /
+                Math.max(
+                    maxG,
+                    0.001
+                )
+            ) *
+            plotHeight
+        );
+    }
+
+
+    ctx.strokeStyle = "#34414e";
+    ctx.lineWidth = 1;
+
+    ctx.fillStyle = "#8fa2b5";
+    ctx.font = "12px sans-serif";
+
+
+    for (let i = 0; i <= 5; i++) {
+
+        const g =
+            maxG *
+            i /
+            5;
+
+        const y =
+            yScale(g);
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+            margin.left,
+            y
+        );
+
+        ctx.lineTo(
+            width - margin.right,
+            y
+        );
+
+        ctx.stroke();
+
+        ctx.fillText(
+            g.toFixed(2),
+            8,
+            y + 4
+        );
+    }
+
+
+    const hzTicks = 6;
+
+    for (
+        let i = 0;
+        i <= hzTicks;
+        i++
+    ) {
+
+        const hz =
+            minHz +
+            (
+                maxHz - minHz
+            ) *
+            i /
+            hzTicks;
+
+        const x =
+            xScale(hz);
+
+        ctx.fillText(
+            hz.toFixed(0),
+            x - 10,
+            height - 15
+        );
+    }
+
+
+    function drawTrace(
+        key,
+        stroke,
+        lineWidth
+    ) {
+
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = lineWidth;
+
+        ctx.beginPath();
+
+        results.forEach(
+            (row, index) => {
+
+                const x =
+                    xScale(
+                        row.frequency_hz
+                    );
+
+                const y =
+                    yScale(
+                        row[key]
+                    );
+
+                if (index === 0) {
+
+                    ctx.moveTo(
+                        x,
+                        y
+                    );
+
+                } else {
+
+                    ctx.lineTo(
+                        x,
+                        y
+                    );
+                }
+            }
+        );
+
+        ctx.stroke();
+    }
+
+
+    drawTrace(
+        "amp_x_g",
+        "#d4a72c",
+        1.2
+    );
+
+    drawTrace(
+        "amp_y_g",
+        "#bc70d4",
+        1.2
+    );
+
+    drawTrace(
+        "amp_z_g",
+        "#55a6d9",
+        1.2
+    );
+
+    drawTrace(
+        "vector_amp_g",
+        "#56d364",
+        3
+    );
+
+
+    const peak =
+        results.reduce(
+            (best, row) =>
+                row.vector_amp_g >
+                best.vector_amp_g
+                    ? row
+                    : best
+        );
+
+
+    const peakX =
+        xScale(
+            peak.frequency_hz
+        );
+
+
+    ctx.strokeStyle = "#ff6b6b";
+    ctx.lineWidth = 1.5;
+
+    ctx.beginPath();
+
+    ctx.moveTo(
+        peakX,
+        margin.top
+    );
+
+    ctx.lineTo(
+        peakX,
+        margin.top +
+        plotHeight
+    );
+
+    ctx.stroke();
+
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 13px sans-serif";
+
+    ctx.fillText(
+        `${peak.frequency_hz} Hz / ` +
+        `${peak.vector_amp_g.toFixed(3)} g`,
+        Math.min(
+            peakX + 8,
+            width - 150
+        ),
+        margin.top + 16
+    );
+
+
+    ctx.fillStyle = "#8fa2b5";
+    ctx.font = "12px sans-serif";
+
+    ctx.fillText(
+        "Frequency (Hz)",
+        width / 2 - 35,
+        height - 2
+    );
+
+    ctx.save();
+
+    ctx.translate(
+        14,
+        height / 2 + 20
+    );
+
+    ctx.rotate(
+        -Math.PI / 2
+    );
+
+    ctx.fillText(
+        "Acceleration response (g)",
+        0,
+        0
+    );
+
+    ctx.restore();
+}
+
+
+window.addEventListener(
+    "resize",
+    () => {
+        if (
+            lastSweepResults.length
+        ) {
+            drawResponseChart(
+                lastSweepResults
+            );
+        }
+    }
+);
+
+
+refreshSensorStatus();
+
+drawResponseChart([]);
+
+</script>
+
+{% endblock %}

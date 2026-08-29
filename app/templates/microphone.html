@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>INMP441 Microphone</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='css/main.css') }}"
+    >
+</head>
+
+<body>
+
+<div class="page-shell">
+
+    <header class="utility-header">
+        <div>
+            <h1>INMP441 MICROPHONE</h1>
+            <div class="subtitle">
+                I²S Capture / Feedback Diagnostics
+            </div>
+        </div>
+    </header>
+
+
+    <section class="panel">
+
+        <h2>Hardware Status</h2>
+
+        <div class="status-grid">
+
+            <div>
+                <span class="label">Detected</span>
+                <span id="micDetected">--</span>
+            </div>
+
+            <div>
+                <span class="label">ALSA Device</span>
+                <span id="micDevice">--</span>
+            </div>
+
+            <div>
+                <span class="label">Sample Rate</span>
+                <span>48000 Hz</span>
+            </div>
+
+            <div>
+                <span class="label">Format</span>
+                <span>S32_LE</span>
+            </div>
+
+        </div>
+
+        <button onclick="refreshMic()">
+            REFRESH HARDWARE
+        </button>
+
+    </section>
+
+
+    <section class="panel">
+
+        <h2>INMP441 Wiring</h2>
+
+        <pre class="diagnostic-box">
+INMP441      Raspberry Pi 4
+
+SCK   --->   GPIO18 / Pin 12
+WS    --->   GPIO19 / Pin 35
+SD    --->   GPIO20 / Pin 38
+VDD   --->   3.3V
+GND   --->   GND
+L/R   --->   GND
+        </pre>
+
+    </section>
+
+
+    <section class="panel">
+
+        <h2>Capture Test</h2>
+
+        <div class="control-row">
+
+            <label>
+                Duration
+                <select id="captureDuration">
+                    <option value="1">1 second</option>
+                    <option value="3" selected>3 seconds</option>
+                    <option value="5">5 seconds</option>
+                    <option value="10">10 seconds</option>
+                </select>
+            </label>
+
+            <button
+                id="captureButton"
+                onclick="captureMic()"
+            >
+                RECORD TEST
+            </button>
+
+        </div>
+
+        <div id="captureResult" class="diagnostic-box">
+            No capture test run.
+        </div>
+
+    </section>
+
+
+    <section class="panel">
+
+        <h2>ALSA Capture Devices</h2>
+
+        <div id="captureDevices" class="diagnostic-box">
+            Loading...
+        </div>
+
+    </section>
+
+
+    <section class="panel">
+
+        <h2>Driver Output</h2>
+
+        <pre id="driverOutput" class="diagnostic-box">
+Waiting...
+        </pre>
+
+    </section>
+
+</div>
+
+
+<script>
+
+async function getJson(url, options = {}) {
+
+    const response = await fetch(url, options);
+
+    const text = await response.text();
+
+    try {
+        return JSON.parse(text);
+    }
+    catch {
+        return {
+            ok: false,
+            error: text
+        };
+    }
+}
+
+
+async function refreshMic() {
+
+    document.getElementById("driverOutput").textContent =
+        "Scanning microphone hardware...";
+
+    const mic = await getJson("/api/hardware/mic");
+
+    document.getElementById("driverOutput").textContent =
+        JSON.stringify(mic, null, 2);
+
+    document.getElementById("micDetected").textContent =
+        mic.found ? "YES" : "NO";
+
+    document.getElementById("micDevice").textContent =
+        mic.device || "None";
+
+
+    const alsa = await getJson("/api/hardware/alsa");
+
+    const capture =
+        alsa.capture?.devices ||
+        alsa.capture_devices?.devices ||
+        [];
+
+    const box = document.getElementById("captureDevices");
+
+    if (!capture.length) {
+        box.textContent =
+            "No ALSA capture devices detected.";
+    }
+    else {
+        box.textContent = capture.map(device => {
+            return [
+                `Card: ${device.card}`,
+                `Card ID: ${device.card_id}`,
+                `Card Name: ${device.card_name}`,
+                `Device: ${device.device}`,
+                `Device Name: ${device.device_name}`,
+                `HW: ${device.hw}`
+            ].join("\n");
+        }).join("\n\n");
+    }
+}
+
+
+async function captureMic() {
+
+    const button =
+        document.getElementById("captureButton");
+
+    const resultBox =
+        document.getElementById("captureResult");
+
+    const output =
+        document.getElementById("driverOutput");
+
+    const duration =
+        parseInt(
+            document.getElementById(
+                "captureDuration"
+            ).value
+        );
+
+    button.disabled = true;
+
+    resultBox.textContent =
+        `Recording ${duration} seconds...`;
+
+    output.textContent =
+        "Starting capture...";
+
+    try {
+
+        const result =
+            await getJson(
+                "/api/hardware/mic/test",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+                    body: JSON.stringify({
+                        duration_s: duration
+                    })
+                }
+            );
+
+        output.textContent =
+            JSON.stringify(result, null, 2);
+
+        if (result.ok) {
+
+            resultBox.textContent =
+                [
+                    "Capture successful",
+                    "",
+                    `Duration: ${
+                        result.duration_s ??
+                        result.analysis?.duration_s ??
+                        "?"
+                    } sec`,
+                    `Channels: ${
+                        result.channels ??
+                        result.analysis?.channels ??
+                        "?"
+                    }`,
+                    `Sample rate: ${
+                        result.sample_rate ??
+                        result.analysis?.sample_rate ??
+                        "?"
+                    } Hz`
+                ].join("\n");
+
+        }
+        else {
+
+            resultBox.textContent =
+                "Capture failed. See Driver Output.";
+
+        }
+
+    }
+    catch (error) {
+
+        resultBox.textContent =
+            "Capture request failed.";
+
+        output.textContent =
+            String(error);
+
+    }
+    finally {
+
+        button.disabled = false;
+
+        refreshMic();
+
+    }
+}
+
+
+refreshMic();
+
+</script>
+
+</body>
+</html>
