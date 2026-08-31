@@ -199,6 +199,49 @@
         grid-template-columns: 1fr 1fr;
     }
 }
+
+.player-volume-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 18px;
+}
+
+.player-volume-row input[type="range"] {
+    flex: 1;
+}
+
+.player-volume-value {
+    min-width: 80px;
+    font-size: 22px;
+    font-weight: bold;
+    text-align: right;
+}
+
+.player-summary {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin: 16px 0;
+}
+
+.player-status {
+    margin: 14px 0;
+    font-weight: bold;
+}
+
+#player-chart {
+    display: block;
+    width: 100%;
+    height: 320px;
+}
+
+@media (max-width: 800px) {
+    .player-summary {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
 </style>
 
 
@@ -351,6 +394,186 @@
 
             <pre id="vibration-result"
                  class="result-box"></pre>
+
+        </section>
+
+
+
+        <section class="adxl-card adxl-wide">
+
+            <h2>Resonance Player</h2>
+
+            <p class="adxl-note">
+                Play the bowl at its measured resonance using a smooth
+                attack, hold and decay envelope. ADXL345 feedback measures
+                the actual mechanical intensity produced by the bowl system.
+            </p>
+
+
+            <div class="controls">
+
+                <label>
+                    Mount Position
+                    <input id="player-mount-position"
+                           type="text"
+                           value="Side - current"
+                           placeholder="Example: Side, Bottom Center">
+                </label>
+
+                <label>
+                    Resonance Frequency (Hz)
+                    <input id="player-frequency"
+                           type="number"
+                           value="529"
+                           min="20"
+                           max="2000"
+                           step="0.1">
+                </label>
+
+                <label>
+                    Attack (sec)
+                    <input id="player-attack"
+                           type="number"
+                           value="3"
+                           min="0.1"
+                           max="20"
+                           step="0.1">
+                </label>
+
+                <label>
+                    Hold (sec)
+                    <input id="player-hold"
+                           type="number"
+                           value="5"
+                           min="0"
+                           max="30"
+                           step="0.5">
+                </label>
+
+                <label>
+                    Decay (sec)
+                    <input id="player-decay"
+                           type="number"
+                           value="8"
+                           min="0.1"
+                           max="30"
+                           step="0.5">
+                </label>
+
+            </div>
+
+
+            <h3>Master Volume</h3>
+
+            <div class="player-volume-row">
+
+                <span>Soft</span>
+
+                <input id="player-drive"
+                       type="range"
+                       min="0.05"
+                       max="2.0"
+                       step="0.05"
+                       value="0.25"
+                       oninput="updatePlayerDriveDisplay()">
+
+                <span>Strong</span>
+
+                <span class="player-volume-value"
+                      id="player-drive-display">
+                    0.25%
+                </span>
+
+            </div>
+
+
+            <button id="player-button"
+                    class="adxl-button primary"
+                    onclick="playBowl()">
+                Play Bowl
+            </button>
+
+
+            <div id="player-status"
+                 class="player-status">
+                Ready
+            </div>
+
+
+            <div class="player-summary">
+
+                <div class="metric">
+                    <span class="metric-label">
+                        Frequency
+                    </span>
+                    <span class="metric-value"
+                          id="player-summary-frequency">
+                        529
+                    </span>
+                    Hz
+                </div>
+
+                <div class="metric">
+                    <span class="metric-label">
+                        Peak Drive
+                    </span>
+                    <span class="metric-value"
+                          id="player-summary-drive">
+                        --
+                    </span>
+                    %
+                </div>
+
+                <div class="metric">
+                    <span class="metric-label">
+                        Peak Response
+                    </span>
+                    <span class="metric-value"
+                          id="player-summary-response">
+                        --
+                    </span>
+                    g
+                </div>
+
+                <div class="metric">
+                    <span class="metric-label">
+                        Max Instantaneous
+                    </span>
+                    <span class="metric-value"
+                          id="player-summary-max">
+                        --
+                    </span>
+                    g
+                </div>
+
+                <div class="metric">
+                    <span class="metric-label">
+                        Invalid Samples
+                    </span>
+                    <span class="metric-value"
+                          id="player-summary-invalid">
+                        --
+                    </span>
+                </div>
+
+            </div>
+
+
+            <div class="chart-container">
+
+                <canvas id="player-chart"></canvas>
+
+                <div class="chart-legend">
+                    <span>
+                        Green: measured mechanical response
+                    </span>
+
+                    <span>
+                        White: commanded drive envelope
+                    </span>
+                </div>
+
+            </div>
 
         </section>
 
@@ -609,6 +832,611 @@ function toggleLive() {
         "Stop Live";
 }
 
+
+
+function updatePlayerDriveDisplay() {
+
+    const drive =
+        parseFloat(
+            document.getElementById(
+                "player-drive"
+            ).value
+        );
+
+    document.getElementById(
+        "player-drive-display"
+    ).textContent =
+        drive.toFixed(2) + "%";
+}
+
+
+async function playBowl() {
+
+    stopLive();
+
+    const button =
+        document.getElementById(
+            "player-button"
+        );
+
+    const status =
+        document.getElementById(
+            "player-status"
+        );
+
+    const frequency =
+        parseFloat(
+            document.getElementById(
+                "player-frequency"
+            ).value
+        );
+
+    const drive =
+        parseFloat(
+            document.getElementById(
+                "player-drive"
+            ).value
+        );
+
+    const attack =
+        parseFloat(
+            document.getElementById(
+                "player-attack"
+            ).value
+        );
+
+    const hold =
+        parseFloat(
+            document.getElementById(
+                "player-hold"
+            ).value
+        );
+
+    const decay =
+        parseFloat(
+            document.getElementById(
+                "player-decay"
+            ).value
+        );
+
+
+    button.disabled = true;
+
+    status.textContent =
+        `Playing ${frequency} Hz at ` +
+        `${drive.toFixed(2)}% drive...`;
+
+
+    const payload = {
+        mount_position:
+            document.getElementById(
+                "player-mount-position"
+            ).value.trim(),
+
+        frequency:
+            frequency,
+
+        peak_drive_percent:
+            drive,
+
+        attack:
+            attack,
+
+        hold:
+            hold,
+
+        decay:
+            decay
+    };
+
+
+    try {
+
+        const response = await fetch(
+            "/api/hardware/adxl345/resonance-player",
+            {
+                method: "POST",
+
+                headers: {
+                    "Content-Type":
+                        "application/json"
+                },
+
+                body:
+                    JSON.stringify(payload)
+            }
+        );
+
+
+        const data =
+            await response.json();
+
+
+        if (!data.ok) {
+
+            status.textContent =
+                data.error ||
+                "Playback failed";
+
+            return;
+        }
+
+
+        document.getElementById(
+            "player-summary-frequency"
+        ).textContent =
+            data.frequency_hz.toFixed(1);
+
+
+        document.getElementById(
+            "player-summary-drive"
+        ).textContent =
+            data.peak_drive_percent.toFixed(2);
+
+
+        document.getElementById(
+            "player-summary-response"
+        ).textContent =
+            data.peak_response_g.toFixed(3);
+
+
+        document.getElementById(
+            "player-summary-max"
+        ).textContent =
+            data.max_abs_g.toFixed(2);
+
+        document.getElementById(
+            "player-summary-invalid"
+        ).textContent =
+            data.invalid_samples || 0;
+
+
+        const mountPosition =
+            data.mount_position ||
+            "Unlabeled position";
+
+        status.textContent =
+            `${mountPosition} — ` +
+            `peak response ` +
+            `${data.peak_response_g.toFixed(3)} g ` +
+            `at ${data.peak_response_time.toFixed(2)} sec`;
+
+
+        drawPlayerChart(
+            data.points
+        );
+
+
+    } catch (error) {
+
+        status.textContent =
+            "Error: " + error;
+
+    } finally {
+
+        button.disabled = false;
+    }
+}
+
+
+function drawPlayerChart(points) {
+
+    const canvas =
+        document.getElementById(
+            "player-chart"
+        );
+
+    const rect =
+        canvas.getBoundingClientRect();
+
+    const dpr =
+        window.devicePixelRatio || 1;
+
+
+    canvas.width =
+        Math.max(
+            500,
+            Math.floor(
+                rect.width * dpr
+            )
+        );
+
+    canvas.height =
+        Math.floor(
+            320 * dpr
+        );
+
+
+    const ctx =
+        canvas.getContext("2d");
+
+    ctx.scale(
+        dpr,
+        dpr
+    );
+
+
+    const width =
+        canvas.width / dpr;
+
+    const height =
+        canvas.height / dpr;
+
+
+    ctx.clearRect(
+        0,
+        0,
+        width,
+        height
+    );
+
+
+    if (!points || !points.length) {
+
+        ctx.fillStyle =
+            "#8193a5";
+
+        ctx.font =
+            "14px sans-serif";
+
+        ctx.fillText(
+            "Play the bowl to display its response.",
+            20,
+            30
+        );
+
+        return;
+    }
+
+
+    const margin = {
+        left: 58,
+        right: 58,
+        top: 25,
+        bottom: 42
+    };
+
+
+    const plotWidth =
+        width -
+        margin.left -
+        margin.right;
+
+
+    const plotHeight =
+        height -
+        margin.top -
+        margin.bottom;
+
+
+    const maxTime =
+        Math.max(
+            ...points.map(
+                p => p.time
+            )
+        );
+
+
+    const maxResponse =
+        Math.max(
+            0.01,
+            ...points.map(
+                p => p.response_g
+            )
+        ) * 1.10;
+
+
+    const maxDrive =
+        Math.max(
+            0.01,
+            ...points.map(
+                p => p.drive_percent
+            )
+        ) * 1.10;
+
+
+    function xScale(t) {
+
+        return (
+            margin.left +
+            (
+                t /
+                maxTime
+            ) *
+            plotWidth
+        );
+    }
+
+
+    function responseY(g) {
+
+        return (
+            margin.top +
+            plotHeight -
+            (
+                g /
+                maxResponse
+            ) *
+            plotHeight
+        );
+    }
+
+
+    function driveY(percent) {
+
+        return (
+            margin.top +
+            plotHeight -
+            (
+                percent /
+                maxDrive
+            ) *
+            plotHeight
+        );
+    }
+
+
+    ctx.strokeStyle =
+        "#34414e";
+
+    ctx.fillStyle =
+        "#8fa2b5";
+
+    ctx.font =
+        "12px sans-serif";
+
+    ctx.lineWidth = 1;
+
+
+    for (
+        let i = 0;
+        i <= 5;
+        i++
+    ) {
+
+        const fraction =
+            i / 5;
+
+        const responseValue =
+            maxResponse *
+            fraction;
+
+        const driveValue =
+            maxDrive *
+            fraction;
+
+        const y =
+            margin.top +
+            plotHeight -
+            fraction *
+            plotHeight;
+
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+            margin.left,
+            y
+        );
+
+        ctx.lineTo(
+            width -
+            margin.right,
+            y
+        );
+
+        ctx.stroke();
+
+
+        ctx.fillText(
+            responseValue.toFixed(2),
+            8,
+            y + 4
+        );
+
+
+        ctx.fillText(
+            driveValue.toFixed(2) + "%",
+            width - 48,
+            y + 4
+        );
+    }
+
+
+    for (
+        let i = 0;
+        i <= 5;
+        i++
+    ) {
+
+        const t =
+            maxTime *
+            i /
+            5;
+
+        const x =
+            xScale(t);
+
+        ctx.fillText(
+            t.toFixed(1),
+            x - 8,
+            height - 14
+        );
+    }
+
+
+    // Commanded drive envelope
+    ctx.strokeStyle =
+        "#d8dee4";
+
+    ctx.lineWidth = 1.5;
+
+    ctx.beginPath();
+
+    points.forEach(
+        (point, index) => {
+
+            const x =
+                xScale(
+                    point.time
+                );
+
+            const y =
+                driveY(
+                    point.drive_percent
+                );
+
+            if (index === 0) {
+
+                ctx.moveTo(
+                    x,
+                    y
+                );
+
+            } else {
+
+                ctx.lineTo(
+                    x,
+                    y
+                );
+            }
+        }
+    );
+
+    ctx.stroke();
+
+
+    // Measured mechanical response
+    ctx.strokeStyle =
+        "#56d364";
+
+    ctx.lineWidth = 3;
+
+    ctx.beginPath();
+
+    points.forEach(
+        (point, index) => {
+
+            const x =
+                xScale(
+                    point.time
+                );
+
+            const y =
+                responseY(
+                    point.response_g
+                );
+
+            if (index === 0) {
+
+                ctx.moveTo(
+                    x,
+                    y
+                );
+
+            } else {
+
+                ctx.lineTo(
+                    x,
+                    y
+                );
+            }
+        }
+    );
+
+    ctx.stroke();
+
+
+    const peak =
+        points.reduce(
+            (best, point) =>
+                point.response_g >
+                best.response_g
+                    ? point
+                    : best
+        );
+
+
+    const peakX =
+        xScale(
+            peak.time
+        );
+
+    const peakY =
+        responseY(
+            peak.response_g
+        );
+
+
+    ctx.fillStyle =
+        "#ffffff";
+
+    ctx.beginPath();
+
+    ctx.arc(
+        peakX,
+        peakY,
+        4,
+        0,
+        Math.PI * 2
+    );
+
+    ctx.fill();
+
+
+    ctx.fillStyle =
+        "#d8dee4";
+
+    ctx.font =
+        "bold 12px sans-serif";
+
+
+    ctx.fillText(
+        `${peak.response_g.toFixed(3)} g`,
+        Math.min(
+            peakX + 8,
+            width - 130
+        ),
+        Math.max(
+            15,
+            peakY - 8
+        )
+    );
+
+
+    ctx.fillStyle =
+        "#8fa2b5";
+
+    ctx.font =
+        "12px sans-serif";
+
+
+    ctx.fillText(
+        "Time (sec)",
+        width / 2 - 24,
+        height - 2
+    );
+
+
+    ctx.save();
+
+    ctx.translate(
+        13,
+        height / 2 + 30
+    );
+
+    ctx.rotate(
+        -Math.PI / 2
+    );
+
+    ctx.fillText(
+        "Measured response (g)",
+        0,
+        0
+    );
+
+    ctx.restore();
+}
 
 async function runVibrationTest() {
 
@@ -1390,6 +2218,9 @@ window.addEventListener(
     }
 );
 
+
+updatePlayerDriveDisplay();
+drawPlayerChart([]);
 
 refreshSensorStatus();
 

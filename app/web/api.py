@@ -164,6 +164,7 @@ import wave
 import numpy as np
 
 from app.hardware.adxl345 import ADXL345
+from app.hardware.resonance_player import play_resonance
 
 
 ADXL_SAMPLE_RATE = 800
@@ -742,3 +743,69 @@ def api_adxl345_sweep():
 
     finally:
         sensor.close()
+
+
+@api_bp.post("/hardware/adxl345/resonance-player")
+def api_adxl345_resonance_player():
+    payload = request.get_json(
+        silent=True
+    ) or {}
+
+    try:
+        mount_position = str(
+            payload.get(
+                "mount_position",
+                "Unlabeled position",
+            )
+        ).strip()
+
+        result = play_resonance(
+            frequency=float(
+                payload.get(
+                    "frequency",
+                    529,
+                )
+            ),
+
+            peak_drive_percent=float(
+                payload.get(
+                    "peak_drive_percent",
+                    0.5,
+                )
+            ),
+
+            attack=float(
+                payload.get(
+                    "attack",
+                    3,
+                )
+            ),
+
+            hold=float(
+                payload.get(
+                    "hold",
+                    5,
+                )
+            ),
+
+            decay=float(
+                payload.get(
+                    "decay",
+                    8,
+                )
+            ),
+        )
+
+        result["mount_position"] = (
+            mount_position or
+            "Unlabeled position"
+        )
+
+        return jsonify(result)
+
+    except Exception as exc:
+
+        return jsonify({
+            "ok": False,
+            "error": str(exc),
+        }), 500
