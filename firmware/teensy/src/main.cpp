@@ -40,18 +40,34 @@ uint16_t storedSamples = 0;
 
 uint16_t previousP2P = 0;
 
-// Stateful resonance tracking
-float lockedFrequency = 0.0f;
-float candidateFrequency = 0.0f;
-uint8_t candidateCount = 0;
+// Automatic resonance voting.
+//
+// Each valid YIN result votes for a 5 Hz frequency bin.
+// The sustained bowl resonance should accumulate far more votes
+// than short-lived strike transients and secondary modes.
 
-constexpr uint8_t LOCK_COUNT = 3;
+constexpr float VOTE_MIN_FREQ_HZ = 100.0f;
+constexpr float VOTE_MAX_FREQ_HZ = 1200.0f;
+constexpr float VOTE_BIN_HZ = 5.0f;
 
-// Candidate readings must agree within this percentage.
-constexpr float CANDIDATE_TOLERANCE = 0.04f;
+constexpr int VOTE_BIN_COUNT =
+    (int)((VOTE_MAX_FREQ_HZ - VOTE_MIN_FREQ_HZ) / VOTE_BIN_HZ) + 1;
 
-// Once locked, readings must remain reasonably close.
-constexpr float LOCK_TOLERANCE = 0.08f;
+float frequencyVotes[VOTE_BIN_COUNT];
+uint16_t frequencyHits[VOTE_BIN_COUNT];
+
+uint16_t totalFrequencyVotes = 0;
+
+float detectedFrequency = 0.0f;
+float detectedScore = 0.0f;
+uint16_t detectedHits = 0;
+
+// Don't call anything "detected" until enough ring-down evidence exists.
+constexpr uint16_t MIN_TOTAL_VOTES = 5;
+constexpr uint16_t MIN_WINNING_HITS = 3;
+
+// Winner should be meaningfully stronger than the runner-up.
+constexpr float WINNER_RATIO = 1.35f;
 
 char commandBuffer[32];
 uint8_t commandLength = 0;
@@ -278,79 +294,131 @@ float calculateFrequency(float mean, uint16_t p2p, float &confidence)
 }
 
 
-float updateFrequencyLock(float rawFrequency, float confidence)
-{
-    if (rawFrequency <= 0.0f || confidence < MIN_CONFIDENCE)
-        return 0.0f;
-
-    /*
-     * Already locked:
-     * only accept values reasonably close to the established resonance.
-     */
-    if (lockedFrequency > 0.0f)
-    {
-        float error =
-            fabsf(rawFrequency - lockedFrequency) / lockedFrequency;
-
-        if (error <= LOCK_TOLERANCE)
-        {
-            // Slowly track small resonance changes.
-            lockedFrequency =
-                0.85f * lockedFrequency +
-                0.15f * rawFrequency;
-
-            return lockedFrequency;
-        }
-
-        // Reject transient/harmonic/subharmonic.
-        return 0.0f;
-    }
-
-    /*
-     * Not locked yet.
-     * Build a candidate from consecutive similar readings.
-     */
-    if (candidateFrequency <= 0.0f)
-    {
-        candidateFrequency = rawFrequency;
-        candidateCount = 1;
-        return 0.0f;
-    }
-
-    float error =
-        fabsf(rawFrequency - candidateFrequency) /
-        candidateFrequency;
-
-    if (error <= CANDIDATE_TOLERANCE)
-    {
-        candidateFrequency =
-            ((candidateFrequency * candidateCount) + rawFrequency) /
-            (candidateCount + 1);
-
-        candidateCount++;
-
-        if (candidateCount >= LOCK_COUNT)
-        {
-            lockedFrequency = candidateFrequency;
-            return lockedFrequency;
-        }
-    }
-    else
-    {
-        // Start a new candidate sequence.
-        candidateFrequency = rawFrequency;
-        candidateCount = 1;
-    }
-
-    return 0.0f;
-}
 
 void resetFrequencyLock()
 {
-    lockedFrequency = 0.0f;
-    candidateFrequency = 0.0f;
-    candidateCount = 0;
+    for (int i = 0; i < VOTE_BIN_COUNT; i++)
+    {
+        frequencyVotes[i] = 0.0f;
+        frequencyHits[i] = 0;
+    }
+
+    totalFrequencyVotes = 0;
+
+    detectedFrequency = 0.0f;
+    detectedScore = 0.0f;
+    detectedHits = 0;
 }
+
+float updateFrequencyLock(float rawFrequency, float confidence)
+{
+    if (rawFrequency <= 0.0f)
+        return 0.0f;
+
+    if (confidence < MIN_CONFIDENCE)
+        return 0.0f;
+
+    if (rawFrequency < VOTE_MIN_FREQ_HZ ||
+        rawFrequency > VOTE_MAX_FREQ_HZ)
+        return 0.0f;
+
+    /*
+     * Round to nearest 5 Hz bin.
+     *
+     * Examples:
+     *
+     *   528.8 -> 530 Hz
+     *   529.7 -> 530 Hz
+     *   531.1 -> 530 Hz
+     *
+     * This is deliberate: we're discovering the resonance cluster,
+     * not trying to preserve sub-Hz precision in the voting stage.
+     */
+    int bin =
+        (int)(((rawFrequency - VOTE_MIN_FREQ_HZ) /
+               VOTE_BIN_HZ) + 0.5f);
+
+    if (bin < 0 || bin >= VOTE_BIN_COUNT)
+        return 0.0f;
+
+    /*
+     * Confidence-weighted vote.
+     *
+     * Persistence matters most:
+     * every 100 ms window contributes one vote, so a sustained
+     * resonance naturally beats a short strike transient.
+     */
+    frequencyVotes[bin] += confidence;
+    frequencyHits[bin]++;
+    totalFrequencyVotes++;
+
+    int bestBin = -1;
+    int secondBin = -1;
+
+    float bestScore = 0.0f;
+    float secondScore = 0.0f;
+
+    for (int i = 0; i < VOTE_BIN_COUNT; i++)
+    {
+        float score = frequencyVotes[i];
+
+        if (score > bestScore)
+        {
+            secondScore = bestScore;
+            secondBin = bestBin;
+
+            bestScore = score;
+            bestBin = i;
+        }
+        else if (score > secondScore)
+        {
+            secondScore = score;
+            secondBin = i;
+        }
+    }
+
+    detectedFrequency = 0.0f;
+    detectedScore = 0.0f;
+    detectedHits = 0;
+
+    if (bestBin < 0)
+        return 0.0f;
+
+    uint16_t bestHits = frequencyHits[bestBin];
+
+    /*
+     * Wait until we've observed enough of the decay before declaring
+     * a winner.
+     */
+    if (totalFrequencyVotes < MIN_TOTAL_VOTES)
+        return 0.0f;
+
+    if (bestHits < MIN_WINNING_HITS)
+        return 0.0f;
+
+    /*
+     * Require separation from the runner-up.
+     *
+     * If there is essentially no runner-up, the winner is accepted.
+     */
+    if (secondScore > 0.0f)
+    {
+        float ratio = bestScore / secondScore;
+
+        if (ratio < WINNER_RATIO)
+            return 0.0f;
+    }
+
+    detectedFrequency =
+        VOTE_MIN_FREQ_HZ +
+        ((float)bestBin * VOTE_BIN_HZ);
+
+    detectedScore = bestScore;
+    detectedHits = bestHits;
+
+    return detectedFrequency;
+}
+
 
 void processCommand(char *cmd)
 {
@@ -537,23 +605,37 @@ void loop()
                 Serial.print(" conf=");
                 Serial.print(confidence, 2);
 
-                Serial.print(" stable=");
+                Serial.print(" detect=");
 
                 if (stableFrequency > 0.0f)
                 {
                     Serial.print(stableFrequency, 1);
-                    Serial.print("Hz LOCK");
+                    Serial.print("Hz");
+
+                    Serial.print(" hits=");
+                    Serial.print(detectedHits);
+
+                    Serial.print(" score=");
+                    Serial.print(detectedScore, 1);
                 }
                 else
                 {
                     Serial.print("---");
-                    Serial.print(" cand=");
-                    Serial.print(candidateCount);
+
+                    Serial.print(" votes=");
+                    Serial.print(totalFrequencyVotes);
                 }
             }
             else
             {
                 Serial.print("---");
+
+                if (detectedFrequency > 0.0f)
+                {
+                    Serial.print(" detect=");
+                    Serial.print(detectedFrequency, 1);
+                    Serial.print("Hz");
+                }
             }
 
             Serial.println();
