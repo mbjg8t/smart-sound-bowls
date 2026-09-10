@@ -1,0 +1,225 @@
+#include <Arduino.h>
+#include <ctype.h>
+#include <stdlib.h>
+#include <string.h>
+
+constexpr uint32_t SAMPLE_RATE_HZ = 20000;
+constexpr uint32_t SAMPLE_PERIOD_US = 1000000UL / SAMPLE_RATE_HZ;
+constexpr uint32_t REPORT_MS = 100;
+
+int adcPin = A0;
+int adcNumber = 0;
+
+uint32_t lastSampleUs = 0;
+uint32_t lastReportMs = 0;
+
+uint32_t sampleCount = 0;
+uint64_t sampleSum = 0;
+uint16_t sampleMin = 4095;
+uint16_t sampleMax = 0;
+
+char commandBuffer[32];
+uint8_t commandLength = 0;
+
+void resetStats()
+{
+    sampleCount = 0;
+    sampleSum = 0;
+    sampleMin = 4095;
+    sampleMax = 0;
+}
+
+int analogPinFromNumber(int n)
+{
+    switch (n)
+    {
+        case 0:  return A0;
+        case 1:  return A1;
+        case 2:  return A2;
+        case 3:  return A3;
+        case 4:  return A4;
+        case 5:  return A5;
+        case 6:  return A6;
+        case 7:  return A7;
+        case 8:  return A8;
+        case 9:  return A9;
+        case 10: return A10;
+        case 11: return A11;
+        case 12: return A12;
+        case 13: return A13;
+        default: return -1;
+    }
+}
+
+void selectAnalogPin(int n)
+{
+    int pin = analogPinFromNumber(n);
+
+    if (pin < 0)
+    {
+        Serial.print("Invalid analog input: A");
+        Serial.println(n);
+        return;
+    }
+
+    adcNumber = n;
+    adcPin = pin;
+
+    // Explicitly configure as high-impedance input.
+    pinMode(adcPin, INPUT_DISABLE);
+
+    resetStats();
+
+    Serial.print("Selected A");
+    Serial.print(adcNumber);
+    Serial.print(" (digital pin ");
+    Serial.print(adcPin);
+    Serial.println(")");
+}
+
+void processCommand(char *cmd)
+{
+    while (*cmd == ' ' || *cmd == '\t')
+        cmd++;
+
+    Serial.print("Command received: [");
+    Serial.print(cmd);
+    Serial.println("]");
+
+    if (strcmp(cmd, "?") == 0 || strcasecmp(cmd, "help") == 0)
+    {
+        Serial.println();
+        Serial.println("Available ADC inputs:");
+        Serial.println("  A0   pin 14");
+        Serial.println("  A1   pin 15");
+        Serial.println("  A2   pin 16");
+        Serial.println("  A3   pin 17");
+        Serial.println("  A4   pin 18");
+        Serial.println("  A5   pin 19");
+        Serial.println("  A6   pin 20");
+        Serial.println("  A7   pin 21");
+        Serial.println("  A8   pin 22");
+        Serial.println("  A9   pin 23");
+        Serial.println("  A10");
+        Serial.println("  A11");
+        Serial.println("  A12");
+        Serial.println("  A13");
+        Serial.println();
+        Serial.println("Type A1 then Enter to select A1.");
+        return;
+    }
+
+    if (toupper(cmd[0]) == 'A' && isdigit(cmd[1]))
+    {
+        int n = atoi(cmd + 1);
+        selectAnalogPin(n);
+        return;
+    }
+
+    Serial.print("Unknown command: ");
+    Serial.println(cmd);
+}
+
+void readSerialCommands()
+{
+    while (Serial.available())
+    {
+        char c = Serial.read();
+
+        if (c == '\r')
+            continue;
+
+        if (c == '\n')
+        {
+            commandBuffer[commandLength] = '\0';
+
+            if (commandLength > 0)
+                processCommand(commandBuffer);
+
+            commandLength = 0;
+        }
+        else if (commandLength < sizeof(commandBuffer) - 1)
+        {
+            commandBuffer[commandLength++] = c;
+        }
+    }
+}
+
+void setup()
+{
+    Serial.begin(115200);
+    analogReadResolution(12);
+
+    selectAnalogPin(0);
+
+    delay(500);
+
+    Serial.println();
+    Serial.println("TEENSY ADC TEST");
+    Serial.println("----------------");
+    Serial.println("Type A0, A1, A2 ... A13 to change input");
+    Serial.print("Sample rate: ");
+    Serial.print(SAMPLE_RATE_HZ);
+    Serial.println(" Hz");
+    Serial.println();
+
+    lastSampleUs = micros();
+    lastReportMs = millis();
+
+    resetStats();
+}
+
+void loop()
+{
+    readSerialCommands();
+
+    uint32_t nowUs = micros();
+
+    if ((uint32_t)(nowUs - lastSampleUs) >= SAMPLE_PERIOD_US)
+    {
+        lastSampleUs += SAMPLE_PERIOD_US;
+
+        uint16_t value = analogRead(adcPin);
+
+        if (value < sampleMin)
+            sampleMin = value;
+
+        if (value > sampleMax)
+            sampleMax = value;
+
+        sampleSum += value;
+        sampleCount++;
+    }
+
+    uint32_t nowMs = millis();
+
+    if ((uint32_t)(nowMs - lastReportMs) >= REPORT_MS)
+    {
+        lastReportMs += REPORT_MS;
+
+        if (sampleCount > 0)
+        {
+            float mean = (float)sampleSum / sampleCount;
+
+            Serial.print("A");
+            Serial.print(adcNumber);
+
+            Serial.print(" n=");
+            Serial.print(sampleCount);
+
+            Serial.print(" min=");
+            Serial.print(sampleMin);
+
+            Serial.print(" max=");
+            Serial.print(sampleMax);
+
+            Serial.print(" mean=");
+            Serial.print(mean, 1);
+
+            Serial.print(" p2p=");
+            Serial.println(sampleMax - sampleMin);
+        }
+
+        resetStats();
+    }
+}

@@ -1,0 +1,324 @@
+#include <Arduino.h>
+#include <ctype.h>
+#include <stdlib.h>
+#include <string.h>
+
+constexpr uint32_t SAMPLE_RATE_HZ = 20000;
+constexpr uint32_t SAMPLE_PERIOD_US = 1000000UL / SAMPLE_RATE_HZ;
+constexpr uint32_t REPORT_MS = 100;
+
+// 100 ms at 20 kHz = 2000 samples
+constexpr uint16_t MAX_SAMPLES = 2100;
+
+// Don't attempt frequency detection unless signal exceeds this p-p level.
+constexpr uint16_t MIN_FREQ_P2P = 100;
+
+int adcPin = A0;
+int adcNumber = 0;
+
+uint32_t lastSampleUs = 0;
+uint32_t lastReportMs = 0;
+
+uint32_t sampleCount = 0;
+uint64_t sampleSum = 0;
+uint16_t sampleMin = 4095;
+uint16_t sampleMax = 0;
+
+uint16_t samples[MAX_SAMPLES];
+uint16_t storedSamples = 0;
+
+char commandBuffer[32];
+uint8_t commandLength = 0;
+
+void resetStats()
+{
+    sampleCount = 0;
+    sampleSum = 0;
+    sampleMin = 4095;
+    sampleMax = 0;
+    storedSamples = 0;
+}
+
+int analogPinFromNumber(int n)
+{
+    switch (n)
+    {
+        case 0:  return A0;
+        case 1:  return A1;
+        case 2:  return A2;
+        case 3:  return A3;
+        case 4:  return A4;
+        case 5:  return A5;
+        case 6:  return A6;
+        case 7:  return A7;
+        case 8:  return A8;
+        case 9:  return A9;
+        case 10: return A10;
+        case 11: return A11;
+        case 12: return A12;
+        case 13: return A13;
+        default: return -1;
+    }
+}
+
+void selectAnalogPin(int n)
+{
+    int pin = analogPinFromNumber(n);
+
+    if (pin < 0)
+    {
+        Serial.print("Invalid analog input: A");
+        Serial.println(n);
+        return;
+    }
+
+    adcNumber = n;
+    adcPin = pin;
+
+    // Do not force INPUT_DISABLE.
+    // analogRead() configures/uses the analog input appropriately.
+
+    resetStats();
+
+    Serial.print("Selected A");
+    Serial.print(adcNumber);
+    Serial.print(" (digital pin ");
+    Serial.print(adcPin);
+    Serial.println(")");
+}
+
+float calculateFrequency(float mean, uint16_t p2p)
+{
+    if (storedSamples < 20)
+        return 0.0f;
+
+    if (p2p < MIN_FREQ_P2P)
+        return 0.0f;
+
+    // Hysteresis prevents noise near the center from creating
+    // multiple false crossings.
+    float hysteresis = p2p * 0.08f;
+
+    if (hysteresis < 8.0f)
+        hysteresis = 8.0f;
+
+    float lowThreshold  = mean - hysteresis;
+    float highThreshold = mean + hysteresis;
+
+    bool armed = false;
+
+    int firstCrossing = -1;
+    int lastCrossing = -1;
+    uint16_t crossingCount = 0;
+
+    for (uint16_t i = 0; i < storedSamples; i++)
+    {
+        float v = samples[i];
+
+        // Arm once signal goes sufficiently below center.
+        if (v < lowThreshold)
+        {
+            armed = true;
+        }
+
+        // Count one rising crossing after crossing upper threshold.
+        if (armed && v > highThreshold)
+        {
+            if (firstCrossing < 0)
+                firstCrossing = i;
+
+            lastCrossing = i;
+            crossingCount++;
+
+            armed = false;
+        }
+    }
+
+    // Need at least 2 rising crossings to measure a period.
+    if (crossingCount < 2 || lastCrossing <= firstCrossing)
+        return 0.0f;
+
+    // Number of full periods between first and last crossing.
+    uint16_t periods = crossingCount - 1;
+
+    float sampleSpan = lastCrossing - firstCrossing;
+
+    return ((float)periods * SAMPLE_RATE_HZ) / sampleSpan;
+}
+
+void processCommand(char *cmd)
+{
+    while (*cmd == ' ' || *cmd == '\t')
+        cmd++;
+
+    Serial.print("Command received: [");
+    Serial.print(cmd);
+    Serial.println("]");
+
+    if (strcmp(cmd, "?") == 0 || strcasecmp(cmd, "help") == 0)
+    {
+        Serial.println();
+        Serial.println("Available ADC inputs:");
+        Serial.println("  A0   pin 14");
+        Serial.println("  A1   pin 15");
+        Serial.println("  A2   pin 16");
+        Serial.println("  A3   pin 17");
+        Serial.println("  A4   pin 18");
+        Serial.println("  A5   pin 19");
+        Serial.println("  A6   pin 20");
+        Serial.println("  A7   pin 21");
+        Serial.println("  A8   pin 22");
+        Serial.println("  A9   pin 23");
+        Serial.println("  A10");
+        Serial.println("  A11");
+        Serial.println("  A12");
+        Serial.println("  A13");
+        Serial.println();
+        Serial.println("Type A1 then Enter to select A1.");
+        return;
+    }
+
+    if (toupper(cmd[0]) == 'A' && isdigit(cmd[1]))
+    {
+        int n = atoi(cmd + 1);
+        selectAnalogPin(n);
+        return;
+    }
+
+    Serial.print("Unknown command: ");
+    Serial.println(cmd);
+}
+
+void readSerialCommands()
+{
+    while (Serial.available())
+    {
+        char c = Serial.read();
+
+        if (c == '\r')
+            continue;
+
+        if (c == '\n')
+        {
+            commandBuffer[commandLength] = '\0';
+
+            if (commandLength > 0)
+                processCommand(commandBuffer);
+
+            commandLength = 0;
+        }
+        else if (commandLength < sizeof(commandBuffer) - 1)
+        {
+            commandBuffer[commandLength++] = c;
+        }
+    }
+}
+
+void setup()
+{
+    Serial.begin(115200);
+    analogReadResolution(12);
+
+    selectAnalogPin(0);
+
+    delay(500);
+
+    Serial.println();
+    Serial.println("TEENSY ADC + FREQUENCY TEST");
+    Serial.println("---------------------------");
+    Serial.println("Type A0, A1, A2 ... A13 to change input");
+
+    Serial.print("Sample rate: ");
+    Serial.print(SAMPLE_RATE_HZ);
+    Serial.println(" Hz");
+
+    Serial.print("Report interval: ");
+    Serial.print(REPORT_MS);
+    Serial.println(" ms");
+
+    Serial.print("Minimum frequency-detect signal: ");
+    Serial.print(MIN_FREQ_P2P);
+    Serial.println(" counts p-p");
+
+    Serial.println();
+
+    lastSampleUs = micros();
+    lastReportMs = millis();
+
+    resetStats();
+}
+
+void loop()
+{
+    readSerialCommands();
+
+    uint32_t nowUs = micros();
+
+    if ((uint32_t)(nowUs - lastSampleUs) >= SAMPLE_PERIOD_US)
+    {
+        lastSampleUs += SAMPLE_PERIOD_US;
+
+        uint16_t value = analogRead(adcPin);
+
+        if (value < sampleMin)
+            sampleMin = value;
+
+        if (value > sampleMax)
+            sampleMax = value;
+
+        sampleSum += value;
+        sampleCount++;
+
+        if (storedSamples < MAX_SAMPLES)
+        {
+            samples[storedSamples++] = value;
+        }
+    }
+
+    uint32_t nowMs = millis();
+
+    if ((uint32_t)(nowMs - lastReportMs) >= REPORT_MS)
+    {
+        lastReportMs += REPORT_MS;
+
+        if (sampleCount > 0)
+        {
+            float mean = (float)sampleSum / sampleCount;
+            uint16_t p2p = sampleMax - sampleMin;
+
+            float frequency = calculateFrequency(mean, p2p);
+
+            Serial.print("A");
+            Serial.print(adcNumber);
+
+            Serial.print(" n=");
+            Serial.print(sampleCount);
+
+            Serial.print(" min=");
+            Serial.print(sampleMin);
+
+            Serial.print(" max=");
+            Serial.print(sampleMax);
+
+            Serial.print(" mean=");
+            Serial.print(mean, 1);
+
+            Serial.print(" p2p=");
+            Serial.print(p2p);
+
+            Serial.print(" freq=");
+
+            if (frequency > 0.0f)
+            {
+                Serial.print(frequency, 1);
+                Serial.println("Hz");
+            }
+            else
+            {
+                Serial.println("---");
+            }
+        }
+
+        resetStats();
+    }
+}

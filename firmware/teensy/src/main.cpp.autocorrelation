@@ -1,0 +1,423 @@
+#include <Arduino.h>
+#include <ctype.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+
+constexpr uint32_t SAMPLE_RATE_HZ = 20000;
+constexpr uint32_t SAMPLE_PERIOD_US = 1000000UL / SAMPLE_RATE_HZ;
+constexpr uint32_t REPORT_MS = 100;
+
+constexpr uint16_t MAX_SAMPLES = 2100;
+
+// Frequency range we care about for bowl testing.
+constexpr float MIN_FREQ_HZ = 150.0f;
+constexpr float MAX_FREQ_HZ = 1200.0f;
+
+// Don't try frequency detection on very weak signals.
+constexpr uint16_t MIN_FREQ_P2P = 100;
+
+// Detect the beginning of a new strike.
+constexpr uint16_t STRIKE_P2P = 250;
+constexpr uint16_t QUIET_P2P  = 100;
+
+// Minimum normalized autocorrelation confidence.
+constexpr float MIN_CONFIDENCE = 0.45f;
+
+int adcPin = A0;
+int adcNumber = 0;
+
+uint32_t lastSampleUs = 0;
+uint32_t lastReportMs = 0;
+
+uint32_t sampleCount = 0;
+uint64_t sampleSum = 0;
+uint16_t sampleMin = 4095;
+uint16_t sampleMax = 0;
+
+uint16_t samples[MAX_SAMPLES];
+uint16_t storedSamples = 0;
+
+uint16_t previousP2P = 0;
+
+char commandBuffer[32];
+uint8_t commandLength = 0;
+
+void resetStats()
+{
+    sampleCount = 0;
+    sampleSum = 0;
+    sampleMin = 4095;
+    sampleMax = 0;
+    storedSamples = 0;
+}
+
+int analogPinFromNumber(int n)
+{
+    switch (n)
+    {
+        case 0:  return A0;
+        case 1:  return A1;
+        case 2:  return A2;
+        case 3:  return A3;
+        case 4:  return A4;
+        case 5:  return A5;
+        case 6:  return A6;
+        case 7:  return A7;
+        case 8:  return A8;
+        case 9:  return A9;
+        case 10: return A10;
+        case 11: return A11;
+        case 12: return A12;
+        case 13: return A13;
+        default: return -1;
+    }
+}
+
+void selectAnalogPin(int n)
+{
+    int pin = analogPinFromNumber(n);
+
+    if (pin < 0)
+    {
+        Serial.print("Invalid analog input: A");
+        Serial.println(n);
+        return;
+    }
+
+    adcNumber = n;
+    adcPin = pin;
+
+    previousP2P = 0;
+    resetStats();
+
+    Serial.print("Selected A");
+    Serial.print(adcNumber);
+    Serial.print(" (digital pin ");
+    Serial.print(adcPin);
+    Serial.println(")");
+}
+
+/*
+ * Normalized autocorrelation.
+ *
+ * We subtract the measured mean so the ~195-count DC offset from the
+ * piezo board does not affect frequency detection.
+ *
+ * For every possible lag corresponding to 150-1200 Hz, calculate:
+ *
+ *        sum(x[n] * x[n+lag])
+ *   --------------------------------
+ *   sqrt(sum(x[n]^2) * sum(x[n+lag]^2))
+ *
+ * Perfect repeating waveform approaches 1.0.
+ */
+float calculateFrequency(float mean, uint16_t p2p, float &confidence)
+{
+    confidence = 0.0f;
+
+    if (storedSamples < 100)
+        return 0.0f;
+
+    if (p2p < MIN_FREQ_P2P)
+        return 0.0f;
+
+    int minLag = (int)(SAMPLE_RATE_HZ / MAX_FREQ_HZ);
+    int maxLag = (int)(SAMPLE_RATE_HZ / MIN_FREQ_HZ);
+
+    if (minLag < 2)
+        minLag = 2;
+
+    if (maxLag >= storedSamples / 2)
+        maxLag = storedSamples / 2;
+
+    float bestScore = -1.0f;
+    int bestLag = 0;
+
+    // Look for LOCAL maxima rather than blindly selecting the
+    // strongest correlation, because a periodic signal also
+    // correlates strongly at 2x, 3x, etc. its period.
+    float prevScore = -2.0f;
+    float currentScore = -2.0f;
+
+    int firstGoodPeakLag = 0;
+    float firstGoodPeakScore = 0.0f;
+
+    for (int lag = minLag; lag <= maxLag + 1; lag++)
+    {
+        int64_t cross = 0;
+        uint64_t energyA = 0;
+        uint64_t energyB = 0;
+
+        uint16_t count = storedSamples - lag;
+
+        for (uint16_t i = 0; i < count; i++)
+        {
+            int32_t a = (int32_t)samples[i] - (int32_t)mean;
+            int32_t b = (int32_t)samples[i + lag] - (int32_t)mean;
+
+            cross += (int64_t)a * b;
+            energyA += (uint64_t)((int64_t)a * a);
+            energyB += (uint64_t)((int64_t)b * b);
+        }
+
+        float score = 0.0f;
+
+        if (energyA > 0 && energyB > 0)
+        {
+            double denom = sqrt((double)energyA * (double)energyB);
+            score = (float)((double)cross / denom);
+        }
+
+        if (score > bestScore && lag <= maxLag)
+        {
+            bestScore = score;
+            bestLag = lag;
+        }
+
+        // Detect a local peak at the previous lag.
+        if (lag > minLag + 1)
+        {
+            int peakLag = lag - 1;
+
+            if (currentScore > prevScore &&
+                currentScore >= score &&
+                currentScore >= MIN_CONFIDENCE &&
+                firstGoodPeakLag == 0)
+            {
+                firstGoodPeakLag = peakLag;
+                firstGoodPeakScore = currentScore;
+            }
+        }
+
+        prevScore = currentScore;
+        currentScore = score;
+    }
+
+    /*
+     * Prefer the first strong autocorrelation peak.
+     * That represents the shortest repeating period and avoids
+     * selecting 2x or 3x the actual period.
+     */
+    if (firstGoodPeakLag > 0)
+    {
+        bestLag = firstGoodPeakLag;
+        bestScore = firstGoodPeakScore;
+    }
+
+    if (bestLag <= 0 || bestScore < MIN_CONFIDENCE)
+        return 0.0f;
+
+    confidence = bestScore;
+
+    /*
+     * Improve resolution using parabolic interpolation around
+     * the selected integer lag.
+     *
+     * For now we leave this at integer-lag resolution. At ~530 Hz:
+     *
+     *     20000 / 38 = 526.3 Hz
+     *     20000 / 37 = 540.5 Hz
+     *
+     * We'll add fractional-lag interpolation after verifying
+     * autocorrelation locks reliably.
+     */
+    return (float)SAMPLE_RATE_HZ / (float)bestLag;
+}
+
+void processCommand(char *cmd)
+{
+    while (*cmd == ' ' || *cmd == '\t')
+        cmd++;
+
+    Serial.print("Command received: [");
+    Serial.print(cmd);
+    Serial.println("]");
+
+    if (strcmp(cmd, "?") == 0 || strcasecmp(cmd, "help") == 0)
+    {
+        Serial.println();
+        Serial.println("Available ADC inputs:");
+        Serial.println("  A0   pin 14");
+        Serial.println("  A1   pin 15");
+        Serial.println("  A2   pin 16");
+        Serial.println("  A3   pin 17");
+        Serial.println("  A4   pin 18");
+        Serial.println("  A5   pin 19");
+        Serial.println("  A6   pin 20");
+        Serial.println("  A7   pin 21");
+        Serial.println("  A8   pin 22");
+        Serial.println("  A9   pin 23");
+        Serial.println("  A10");
+        Serial.println("  A11");
+        Serial.println("  A12");
+        Serial.println("  A13");
+        Serial.println();
+        return;
+    }
+
+    if (toupper(cmd[0]) == 'A' && isdigit(cmd[1]))
+    {
+        int n = atoi(cmd + 1);
+        selectAnalogPin(n);
+        return;
+    }
+
+    Serial.print("Unknown command: ");
+    Serial.println(cmd);
+}
+
+void readSerialCommands()
+{
+    while (Serial.available())
+    {
+        char c = Serial.read();
+
+        if (c == '\r')
+            continue;
+
+        if (c == '\n')
+        {
+            commandBuffer[commandLength] = '\0';
+
+            if (commandLength > 0)
+                processCommand(commandBuffer);
+
+            commandLength = 0;
+        }
+        else if (commandLength < sizeof(commandBuffer) - 1)
+        {
+            commandBuffer[commandLength++] = c;
+        }
+    }
+}
+
+void setup()
+{
+    Serial.begin(115200);
+    analogReadResolution(12);
+
+    selectAnalogPin(0);
+
+    delay(500);
+
+    Serial.println();
+    Serial.println("TEENSY PIEZO AUTOCORRELATION TEST");
+    Serial.println("---------------------------------");
+
+    Serial.print("Sample rate: ");
+    Serial.print(SAMPLE_RATE_HZ);
+    Serial.println(" Hz");
+
+    Serial.print("Frequency range: ");
+    Serial.print(MIN_FREQ_HZ, 0);
+    Serial.print("-");
+    Serial.print(MAX_FREQ_HZ, 0);
+    Serial.println(" Hz");
+
+    Serial.println();
+
+    lastSampleUs = micros();
+    lastReportMs = millis();
+
+    resetStats();
+}
+
+void loop()
+{
+    readSerialCommands();
+
+    uint32_t nowUs = micros();
+
+    if ((uint32_t)(nowUs - lastSampleUs) >= SAMPLE_PERIOD_US)
+    {
+        lastSampleUs += SAMPLE_PERIOD_US;
+
+        uint16_t value = analogRead(adcPin);
+
+        if (value < sampleMin)
+            sampleMin = value;
+
+        if (value > sampleMax)
+            sampleMax = value;
+
+        sampleSum += value;
+        sampleCount++;
+
+        if (storedSamples < MAX_SAMPLES)
+            samples[storedSamples++] = value;
+    }
+
+    uint32_t nowMs = millis();
+
+    if ((uint32_t)(nowMs - lastReportMs) >= REPORT_MS)
+    {
+        lastReportMs += REPORT_MS;
+
+        if (sampleCount > 0)
+        {
+            float mean = (float)sampleSum / sampleCount;
+            uint16_t p2p = sampleMax - sampleMin;
+
+            bool newStrike =
+                previousP2P < QUIET_P2P &&
+                p2p >= STRIKE_P2P;
+
+            float confidence = 0.0f;
+            float frequency = 0.0f;
+
+            if (!newStrike)
+                frequency = calculateFrequency(mean, p2p, confidence);
+
+            Serial.print("A");
+            Serial.print(adcNumber);
+
+            Serial.print(" n=");
+            Serial.print(sampleCount);
+
+            Serial.print(" min=");
+            Serial.print(sampleMin);
+
+            Serial.print(" max=");
+            Serial.print(sampleMax);
+
+            Serial.print(" mean=");
+            Serial.print(mean, 1);
+
+            Serial.print(" p2p=");
+            Serial.print(p2p);
+
+            Serial.print(" freq=");
+
+            if (newStrike)
+            {
+                Serial.print("---");
+                Serial.print(" STRIKE");
+            }
+            else if (frequency > 0.0f)
+            {
+                Serial.print(frequency, 1);
+                Serial.print("Hz");
+
+                Serial.print(" conf=");
+                Serial.print(confidence, 2);
+            }
+            else
+            {
+                Serial.print("---");
+
+                if (p2p >= MIN_FREQ_P2P)
+                {
+                    Serial.print(" conf=");
+                    Serial.print(confidence, 2);
+                }
+            }
+
+            Serial.println();
+
+            previousP2P = p2p;
+        }
+
+        resetStats();
+    }
+}
