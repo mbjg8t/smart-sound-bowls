@@ -11,18 +11,44 @@ venv/
 .idea/
 # OS
 .DS_Store
+Thumbs.db
 # Runtime
 *.log
 *.pid
 # Local configuration
 .env
-# Compiled objects / build artifacts
+# ------------------------------------------------------------
+# C / C++ build artifacts
 *.o
 *.obj
+*.a
+*.so
 *.elf
 *.hex
 *.bin
-# PlatformIO build products
+*.map
+*.d
+*.lst
+# PlatformIO / Teensy build artifacts
 .pio/
 firmware/teensy/.pio/
-# Virtual environment
+.pioenvs/
+.piolibdeps/
+# PlatformIO generated/debug files
+*.dblite
+# Temporary / backup editor files
+*~
+*.swp
+*.swo
+*.tmp
+# Python tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+# macOS / Windows filesystem junk
+._*
+Desktop.ini
+# Source backups / scratch copies
+*.bak
+*.backup

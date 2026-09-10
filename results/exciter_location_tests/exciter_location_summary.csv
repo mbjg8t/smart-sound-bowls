@@ -1,0 +1,6 @@
+label,exciter,location,resonance_hz,sweep_peak_p2p,drive_amplitude,baseline_p2p,drive_median_p2p,drive_max_p2p,drive_measured_hz,initial_ringdown_p2p,t50_s,t37_s,t20_s,adc_clipped
+current_exciter_location_1,current,location_1,529.1538461538462,233.0,0.0015,59,219.5,231,529.5,233,0.20172354900023493,0.20172354900023493,0.3016955980001512,False
+current_exciter_location_2,current,location_2,555.1458333333334,52.5,0.0015,46,50,61,,53,0.8902355480004189,3.8903925720005645,,False
+current_exciter_location_2,current,location_2,512.285,63.5,0.0015,56,56.5,63,,60,0.0013479690005624434,0.0013479690005624434,0.0013479690005624434,False
+current_exciter_base_020,current,base,551.7321428571429,60.0,0.01,56,56,75,,55,,,,False
+1w_exciter_side_5_8,1w,side_5_8,528.6907894736842,281.0,0.01,79,821,842,528.8,830,0.5160793960003502,0.5160793960003502,0.6160649430003104,True

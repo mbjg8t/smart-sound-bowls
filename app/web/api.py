@@ -1,3 +1,4 @@
+from app.core.test_logger import save_test, summarize_tests
 from flask import Blueprint, current_app, jsonify, request
 
 
@@ -165,6 +166,7 @@ import numpy as np
 
 from app.hardware.adxl345 import ADXL345
 from app.hardware.resonance_player import play_resonance
+from app.hardware.bowl_performance import play_performance
 
 
 ADXL_SAMPLE_RATE = 800
@@ -801,10 +803,252 @@ def api_adxl345_resonance_player():
             "Unlabeled position"
         )
 
+        save_test(
+            test_type="resonance_player",
+
+            mount_position=result[
+                "mount_position"
+            ],
+
+            settings={
+                "frequency":
+                    result.get(
+                        "frequency_hz"
+                    ),
+
+                "peak_drive_percent":
+                    result.get(
+                        "peak_drive_percent"
+                    ),
+
+                "attack":
+                    result.get(
+                        "attack"
+                    ),
+
+                "hold":
+                    result.get(
+                        "hold"
+                    ),
+
+                "decay":
+                    result.get(
+                        "decay"
+                    ),
+            },
+
+            results=result,
+        )
+
         return jsonify(result)
 
     except Exception as exc:
 
+        return jsonify({
+            "ok": False,
+            "error": str(exc),
+        }), 500
+
+
+@api_bp.post("/hardware/adxl345/bowl-performance")
+def api_adxl345_bowl_performance():
+    payload = request.get_json(
+        silent=True
+    ) or {}
+
+    try:
+        mount_position = str(
+            payload.get(
+                "mount_position",
+                "Unlabeled position",
+            )
+        ).strip()
+
+        signal_2_mode = str(
+            payload.get(
+                "signal_2_mode",
+                "mirror",
+            )
+        ).lower()
+
+        result = play_performance(
+            preset=payload.get(
+                "preset",
+                "continuous",
+            ),
+
+            center_frequency=float(
+                payload.get(
+                    "center_frequency",
+                    529,
+                )
+            ),
+
+            peak_drive_percent=float(
+                payload.get(
+                    "peak_drive_percent",
+                    0.10,
+                )
+            ),
+
+            duration=float(
+                payload.get(
+                    "duration",
+                    15,
+                )
+            ),
+
+            movement=float(
+                payload.get(
+                    "movement",
+                    0.5,
+                )
+            ),
+
+            character=float(
+                payload.get(
+                    "character",
+                    0.5,
+                )
+            ),
+
+            signal_2_mode=(
+                signal_2_mode
+            ),
+
+            signal_2_preset=(
+                payload.get(
+                    "signal_2_preset"
+                )
+            ),
+
+            signal_2_center_frequency=(
+                float(
+                    payload[
+                        "signal_2_center_frequency"
+                    ]
+                )
+                if payload.get(
+                    "signal_2_center_frequency"
+                ) is not None
+                else None
+            ),
+
+            signal_2_peak_drive_percent=(
+                float(
+                    payload[
+                        "signal_2_peak_drive_percent"
+                    ]
+                )
+                if payload.get(
+                    "signal_2_peak_drive_percent"
+                ) is not None
+                else None
+            ),
+
+            signal_2_movement=(
+                float(
+                    payload[
+                        "signal_2_movement"
+                    ]
+                )
+                if payload.get(
+                    "signal_2_movement"
+                ) is not None
+                else None
+            ),
+
+            signal_2_character=(
+                float(
+                    payload[
+                        "signal_2_character"
+                    ]
+                )
+                if payload.get(
+                    "signal_2_character"
+                ) is not None
+                else None
+            ),
+        )
+
+        result["mount_position"] = (
+            mount_position or
+            "Unlabeled position"
+        )
+
+        save_test(
+            test_type="bowl_performance",
+
+            mount_position=result[
+                "mount_position"
+            ],
+
+            settings={
+                "signal_1":
+                    result.get(
+                        "signal_1"
+                    ),
+
+                "signal_2":
+                    result.get(
+                        "signal_2"
+                    ),
+
+                # Keep old fields useful
+                # for old log readers.
+                "preset":
+                    result.get(
+                        "preset"
+                    ),
+
+                "center_frequency":
+                    result.get(
+                        "center_frequency_hz"
+                    ),
+
+                "peak_drive_percent":
+                    result.get(
+                        "peak_drive_percent"
+                    ),
+
+                "duration":
+                    result.get(
+                        "duration_seconds"
+                    ),
+
+                "movement":
+                    result.get(
+                        "movement"
+                    ),
+
+                "character":
+                    result.get(
+                        "character"
+                    ),
+            },
+
+            results=result,
+        )
+
+        return jsonify(
+            result
+        )
+
+    except Exception as exc:
+        return jsonify({
+            "ok": False,
+            "error": str(exc),
+        }), 500
+
+@api_bp.get("/hardware/adxl345/test-results")
+def api_adxl345_test_results():
+    try:
+        return jsonify({
+            "ok": True,
+            "tests": summarize_tests(),
+        })
+
+    except Exception as exc:
         return jsonify({
             "ok": False,
             "error": str(exc),
