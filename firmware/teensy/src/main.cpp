@@ -56,7 +56,17 @@ constexpr int VOTE_BIN_COUNT =
 float frequencyVotes[VOTE_BIN_COUNT];
 uint16_t frequencyHits[VOTE_BIN_COUNT];
 
+// Sum of frequency * confidence for each bin.
+// This lets us recover the precise resonance instead of
+// merely reporting the 5 Hz bin center.
+double frequencyWeightedSum[VOTE_BIN_COUNT];
+
 uint16_t totalFrequencyVotes = 0;
+
+// End the current resonance event after sustained quiet.
+// REPORT_MS = 100, so 10 windows = 1 second.
+uint16_t quietWindowCount = 0;
+constexpr uint16_t QUIET_RESET_WINDOWS = 10;
 
 float detectedFrequency = 0.0f;
 float detectedScore = 0.0f;
@@ -301,9 +311,11 @@ void resetFrequencyLock()
     {
         frequencyVotes[i] = 0.0f;
         frequencyHits[i] = 0;
+        frequencyWeightedSum[i] = 0.0;
     }
 
     totalFrequencyVotes = 0;
+    quietWindowCount = 0;
 
     detectedFrequency = 0.0f;
     detectedScore = 0.0f;
@@ -350,6 +362,10 @@ float updateFrequencyLock(float rawFrequency, float confidence)
      */
     frequencyVotes[bin] += confidence;
     frequencyHits[bin]++;
+
+    frequencyWeightedSum[bin] +=
+        (double)rawFrequency * (double)confidence;
+
     totalFrequencyVotes++;
 
     int bestBin = -1;
@@ -409,9 +425,24 @@ float updateFrequencyLock(float rawFrequency, float confidence)
             return 0.0f;
     }
 
-    detectedFrequency =
-        VOTE_MIN_FREQ_HZ +
-        ((float)bestBin * VOTE_BIN_HZ);
+    /*
+     * The bin determines WHICH resonance won.
+     *
+     * The reported frequency is then calculated from the actual
+     * YIN measurements that landed in that bin.
+     */
+    if (frequencyVotes[bestBin] > 0.0f)
+    {
+        detectedFrequency =
+            (float)(frequencyWeightedSum[bestBin] /
+                    (double)frequencyVotes[bestBin]);
+    }
+    else
+    {
+        detectedFrequency =
+            VOTE_MIN_FREQ_HZ +
+            ((float)bestBin * VOTE_BIN_HZ);
+    }
 
     detectedScore = bestScore;
     detectedHits = bestHits;
@@ -639,6 +670,51 @@ void loop()
             }
 
             Serial.println();
+
+            /*
+             * Track sustained quiet.
+             *
+             * An occasional weak/noisy window does not end the event.
+             * We require 10 consecutive quiet windows = 1 second.
+             */
+            if (p2p < QUIET_P2P)
+            {
+                quietWindowCount++;
+            }
+            else
+            {
+                quietWindowCount = 0;
+            }
+
+            /*
+             * Finish this bowl event, print the final automatically
+             * discovered resonance, and clear all voting state so
+             * the next bowl starts completely fresh.
+             */
+            if (quietWindowCount >= QUIET_RESET_WINDOWS)
+            {
+                if (detectedFrequency > 0.0f)
+                {
+                    Serial.println();
+                    Serial.print("FINAL A");
+                    Serial.print(adcNumber);
+
+                    Serial.print(" resonance=");
+                    Serial.print(detectedFrequency, 2);
+                    Serial.print("Hz");
+
+                    Serial.print(" hits=");
+                    Serial.print(detectedHits);
+
+                    Serial.print(" score=");
+                    Serial.println(detectedScore, 2);
+
+                    Serial.println("READY");
+                    Serial.println();
+                }
+
+                resetFrequencyLock();
+            }
 
             previousP2P = p2p;
         }
