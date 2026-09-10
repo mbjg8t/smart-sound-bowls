@@ -6,17 +6,23 @@ __pycache__/
 # Virtual environments
 .venv/
 venv/
-
 # IDE
 .vscode/
 .idea/
-
 # OS
 .DS_Store
-
 # Runtime
 *.log
 *.pid
-
 # Local configuration
 .env
+# Compiled objects / build artifacts
+*.o
+*.obj
+*.elf
+*.hex
+*.bin
+# PlatformIO build products
+.pio/
+firmware/teensy/.pio/
+# Virtual environment
