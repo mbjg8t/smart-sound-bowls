@@ -11,7 +11,7 @@ class BowlState:
     pattern: str = "strike"
     waveform: str = "sine"
     frequency_hz: float = 528.7
-    amplitude: float = 0.0
+    amplitude: float = 0.5
     attack_s: float = 3.0
     hold_s: float = 4.0
     release_s: float = 5.0

@@ -42,8 +42,10 @@
     <input id="pattern" type="hidden" value="strike">
     <input id="waveform" type="hidden" value="sine">
 
-    <div style="margin-top: 22px;">
-      <div class="card-title">ADVANCED</div>
+    <details style="margin-top: 20px;">
+      <summary style="cursor:pointer; font-weight:600;">
+        Advanced
+      </summary>
 
       <div class="form-grid" style="margin-top:16px;">
 
@@ -89,7 +91,7 @@
         </div>
 
       </div>
-    </div>
+    </details>
 
     <!-- Existing unused experimental parameters remain hidden
          so the current backend API remains compatible. -->
@@ -99,9 +101,6 @@
 
     <div class="button-row bowl-actions"
          style="margin-top:20px;">
-      <button class="button button-secondary"
-              onclick="applySettings()">APPLY</button>
-
       <button class="button button-start"
               onclick="startTest()">PLAY</button>
 

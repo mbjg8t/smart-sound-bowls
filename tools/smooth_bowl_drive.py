@@ -38,6 +38,12 @@ def main():
 
     parser.add_argument("--device", default="hw:3,1")
     parser.add_argument("--frequency", type=float, default=528.7)
+    parser.add_argument(
+        "--channel",
+        choices=["left", "right", "both"],
+        default="both",
+        help="PCM5122 output channel",
+    )
 
     parser.add_argument(
         "--amplitude",
@@ -78,8 +84,15 @@ def main():
     scale = 2147483647.0
     mono = np.clip(signal * scale, -2147483648, 2147483647).astype("<i4")
 
-    # Same signal to L/R channels.
-    stereo = np.column_stack((mono, mono)).reshape(-1)
+    # Route the signal to the selected physical PCM5122 channel.
+    silence = np.zeros_like(mono)
+
+    if args.channel == "left":
+        stereo = np.column_stack((mono, silence)).reshape(-1)
+    elif args.channel == "right":
+        stereo = np.column_stack((silence, mono)).reshape(-1)
+    else:
+        stereo = np.column_stack((mono, mono)).reshape(-1)
 
     print()
     print("=" * 70)
@@ -87,6 +100,7 @@ def main():
     print("=" * 70)
     print(f"Device       : {args.device}")
     print(f"Frequency    : {args.frequency:.3f} Hz")
+    print(f"Channel      : {args.channel.upper()}")
     print(f"Peak level   : {args.amplitude * 100:.4f}%")
     print(f"Attack       : {args.attack:.2f} sec")
     print(f"Hold         : {args.hold:.2f} sec")

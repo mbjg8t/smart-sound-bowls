@@ -375,14 +375,6 @@ class SoundBowlController:
             release_s=current[
                 "release_s"
             ],
-
-            rest_s=current[
-                "rest_s"
-            ],
-
-            repeats=current[
-                "repeats"
-            ],
         )
 
         return self.get_state(
@@ -443,14 +435,6 @@ class SoundBowlController:
 
             release_s=current[
                 "release_s"
-            ],
-
-            rest_s=current[
-                "rest_s"
-            ],
-
-            repeats=current[
-                "repeats"
             ],
         )
 

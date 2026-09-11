@@ -36,7 +36,7 @@ class AudioEngine:
         self.waveform = "sine"
 
         self.frequency_hz = 528.7
-        self.amplitude = 0.0
+        self.amplitude = 0.5
 
         self.attack_s = 3.0
         self.hold_s = 4.0

@@ -36,13 +36,11 @@ class AudioEngine:
         self.waveform = "sine"
 
         self.frequency_hz = 528.7
-        self.amplitude = 0.0
+        self.amplitude = 0.5
 
         self.attack_s = 3.0
         self.hold_s = 4.0
         self.release_s = 5.0
-        self.rest_s = 3.0
-        self.repeats = 1
 
         self._process = None
 
@@ -62,8 +60,6 @@ class AudioEngine:
         attack_s=None,
         hold_s=None,
         release_s=None,
-        rest_s=None,
-        repeats=None,
         device=None,
         channel=None,
     ):
@@ -115,18 +111,6 @@ class AudioEngine:
                 self.release_s = max(
                     0.0,
                     float(release_s),
-                )
-
-            if rest_s is not None:
-                self.rest_s = max(
-                    0.0,
-                    float(rest_s),
-                )
-
-            if repeats is not None:
-                self.repeats = max(
-                    1,
-                    int(repeats),
                 )
 
             if device is not None:
@@ -191,35 +175,9 @@ class AudioEngine:
                 + " ".join(cmd)
             )
 
-            if self.repeats > 1 or self.rest_s > 0:
-                shell_parts = []
-
-                for cycle in range(self.repeats):
-                    shell_parts.append(
-                        " ".join(
-                            subprocess.list2cmdline([part])
-                            for part in cmd
-                        )
-                    )
-
-                    if (
-                        cycle < self.repeats - 1
-                        and self.rest_s > 0
-                    ):
-                        shell_parts.append(
-                            f"sleep {self.rest_s}"
-                        )
-
-                shell_command = " && ".join(shell_parts)
-
-                self._process = subprocess.Popen(
-                    shell_command,
-                    shell=True,
-                )
-            else:
-                self._process = subprocess.Popen(
-                    cmd
-                )
+            self._process = subprocess.Popen(
+                cmd
+            )
 
             self.running = True
 
@@ -279,8 +237,6 @@ class AudioEngine:
             "attack_s": self.attack_s,
             "hold_s": self.hold_s,
             "release_s": self.release_s,
-            "rest_s": self.rest_s,
-            "repeats": self.repeats,
             "device": self.device,
             "channel": self.channel,
             "backend": "pi_pcm5122",

@@ -1,56 +1,29 @@
 #!/bin/bash
-set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$(dirname "$0")/.."
 
-cd "$REPO_ROOT"
-
-source "$REPO_ROOT/.venv/bin/activate"
+AMPLITUDE="${1:-0.5}"
+CHANNEL="${2:-left}"
+FREQUENCY="${3:-528.7}"
 
 echo
 echo "============================================================"
-echo " 1W EXCITER - SMOOTH BOWL DRIVE TESTS"
+echo " 1W EXCITER - SMOOTH BOWL DRIVE"
 echo "============================================================"
+echo "Frequency : ${FREQUENCY} Hz"
+echo "Amplitude : ${AMPLITUDE}"
+echo "Channel   : ${CHANNEL}"
+echo "============================================================"
+echo
 
-echo
-echo "TEST 1 - Gentle"
-echo "0.07% drive, 8s attack, 4s hold, 10s release"
-echo
-python tools/smooth_bowl_drive.py \
-    --frequency 528.7 \
-    --amplitude 0.0007 \
-    --attack 8 \
-    --hold 4 \
-    --release 10
-
-sleep 3
-
-echo
-echo "TEST 2 - Faster"
-echo "0.07% drive, 3s attack, 4s hold, 5s release"
-echo
-python tools/smooth_bowl_drive.py \
-    --frequency 528.7 \
-    --amplitude 0.0007 \
+python3 tools/smooth_bowl_drive.py \
+    --device hw:3,1 \
+    --channel "$CHANNEL" \
+    --frequency "$FREQUENCY" \
+    --amplitude "$AMPLITUDE" \
     --attack 3 \
     --hold 4 \
     --release 5
 
-sleep 3
-
 echo
-echo "TEST 3 - Slow sound-bath swell"
-echo "0.07% drive, 15s attack, 10s hold, 20s release"
-echo
-python tools/smooth_bowl_drive.py \
-    --frequency 528.7 \
-    --amplitude 0.0007 \
-    --attack 15 \
-    --hold 10 \
-    --release 20
-
-echo
-echo "============================================================"
-echo " COMPLETE"
-echo "============================================================"
+echo "Done."

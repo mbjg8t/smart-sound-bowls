@@ -12,101 +12,25 @@
 
 <div class="bowl-workspace">
   <section class="card control-panel-wide">
-    <div class="card-title">BOWL CONTROL</div>
-
+    <div class="card-title">DRIVE / PATTERN</div>
     <div class="form-grid">
-      <div>
-        <label>Frequency (Hz)</label>
-        <input id="frequency_hz"
-               type="number"
-               step="0.1"
-               min="10"
-               max="5000">
-      </div>
-
-      <div>
-        <label>Max Volume (%)</label>
-        <input id="amplitude"
-               type="number"
-               step="1"
-               min="0"
-               max="100">
-      </div>
+      <div><label>Pattern</label><select id="pattern"><option value="strike">Strike</option><option value="continuous">Continuous</option><option value="chirp">Chirp</option><option value="wah">Wah</option><option value="pulse">Pulse / On-Off</option></select></div>
+      <div><label>Waveform</label><select id="waveform"><option value="sine">Sine</option><option value="square">Square</option><option value="triangle">Triangle</option><option value="saw">Saw</option></select></div>
+      <div><label>Frequency (Hz)</label><input id="frequency_hz" type="number" step="0.1" min="10" max="5000"></div>
+      <div><label>Volume (%)</label><input id="amplitude" type="number" step="1" min="0" max="100"></div>
+      <div><label>Attack (s)</label><input id="attack_s" type="number" step="0.1" min="0"></div>
+      <div><label>Hold / On (s)</label><input id="hold_s" type="number" step="0.1" min="0"></div>
+      <div><label>Release (s)</label><input id="release_s" type="number" step="0.1" min="0"></div>
+      <div><label>Rest / Ringdown (s)</label><input id="rest_s" type="number" step="0.1" min="0"></div>
+      <div><label>Repeats</label><input id="repeats" type="number" step="1" min="1" max="100"></div>
+      <div><label>Chirp span (Hz)</label><input id="chirp_span_hz" type="number" step="0.1"></div>
+      <div><label>Wah depth (Hz)</label><input id="wah_depth_hz" type="number" step="0.1"></div>
+      <div><label>Wah rate (Hz)</label><input id="wah_rate_hz" type="number" step="0.01"></div>
     </div>
-
-    <!--
-      These are fixed internally for the current bowl driver.
-      We keep the existing backend fields so no backend changes
-      are required.
-    -->
-    <input id="pattern" type="hidden" value="strike">
-    <input id="waveform" type="hidden" value="sine">
-
-    <div style="margin-top: 22px;">
-      <div class="card-title">ADVANCED</div>
-
-      <div class="form-grid" style="margin-top:16px;">
-
-        <div>
-          <label>Ramp Up Time (sec)</label>
-          <input id="attack_s"
-                 type="number"
-                 step="0.1"
-                 min="0">
-        </div>
-
-        <div>
-          <label>Hold On (sec)</label>
-          <input id="hold_s"
-                 type="number"
-                 step="0.1"
-                 min="0">
-        </div>
-
-        <div>
-          <label>Ramp Down Time (sec)</label>
-          <input id="release_s"
-                 type="number"
-                 step="0.1"
-                 min="0">
-        </div>
-
-        <div>
-          <label>Hold Off (sec)</label>
-          <input id="rest_s"
-                 type="number"
-                 step="0.1"
-                 min="0">
-        </div>
-
-        <div>
-          <label>Repeats</label>
-          <input id="repeats"
-                 type="number"
-                 step="1"
-                 min="1"
-                 max="100">
-        </div>
-
-      </div>
-    </div>
-
-    <!-- Existing unused experimental parameters remain hidden
-         so the current backend API remains compatible. -->
-    <input id="chirp_span_hz" type="hidden" value="20">
-    <input id="wah_depth_hz" type="hidden" value="8">
-    <input id="wah_rate_hz" type="hidden" value="0.35">
-
-    <div class="button-row bowl-actions"
-         style="margin-top:20px;">
-      <button class="button button-secondary"
-              onclick="applySettings()">APPLY</button>
-
-      <button class="button button-start"
-              onclick="startTest()">PLAY</button>
-
-      <button class="button button-stop"
-              onclick="stopTest()">STOP</button>
+    <div class="button-row bowl-actions">
+      <button class="button button-secondary" onclick="applySettings()">APPLY</button>
+      <button class="button button-start" onclick="startTest()">START TEST</button>
+      <button class="button button-stop" onclick="stopTest()">STOP</button>
     </div>
     <div class="message" id="message">Ready.</div>
   </section>
@@ -116,7 +40,7 @@
     <div class="metric"><span>Output</span><strong id="live-output">{{ bowl.hardware.driver_channel }}</strong></div>
     <div class="metric"><span>Pattern</span><strong id="live-pattern">{{ bowl.pattern }}</strong></div>
     <div class="metric"><span>Frequency</span><strong id="live-frequency">{{ bowl.frequency_hz }} Hz</strong></div>
-    <div class="metric"><span>Volume</span><strong id="live-drive">{{ bowl.amplitude * 100 }} %</strong></div>
+    <div class="metric"><span>Drive</span><strong id="live-drive">{{ bowl.amplitude * 100 }} %</strong></div>
     <div class="metric"><span>Piezo level</span><strong id="live-piezo">--</strong></div>
     <div class="metric"><span>Detected freq.</span><strong id="live-detected">--</strong></div>
     <div class="metric"><span>Resonance</span><strong id="live-resonance">--</strong></div>
@@ -201,7 +125,7 @@ function updateLive(bowl) {
   document.getElementById('live-output').textContent = hw.driver_channel;
   document.getElementById('live-pattern').textContent = bowl.pattern;
   document.getElementById('live-frequency').textContent = fmt(bowl.frequency_hz, 2, ' Hz');
-  document.getElementById('live-drive').textContent = fmt(bowl.amplitude * 100, 0, ' %');
+  document.getElementById('live-drive').textContent = fmt(bowl.amplitude * 100, 3, ' %');
   document.getElementById('live-piezo').textContent = fmt(bowl.piezo_level, 3);
   document.getElementById('live-detected').textContent = fmt(bowl.detected_frequency_hz, 2, ' Hz');
   document.getElementById('live-resonance').textContent = fmt(bowl.resonance_frequency_hz, 2, ' Hz');

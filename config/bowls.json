@@ -7,8 +7,8 @@
     "notes": "Current prototype bowl 1",
     "calibration": {
       "resonance_hz": 528.7,
-      "preferred_drive": 0.0007,
-      "max_drive": 0.10,
+      "preferred_drive": 0.5,
+      "max_drive": 1.0,
       "feedback_scale": 1.0
     }
   },
@@ -20,8 +20,8 @@
     "notes": "Current prototype bowl 2",
     "calibration": {
       "resonance_hz": null,
-      "preferred_drive": 0.0007,
-      "max_drive": 0.10,
+      "preferred_drive": 0.5,
+      "max_drive": 1.0,
       "feedback_scale": 1.0
     }
   }
