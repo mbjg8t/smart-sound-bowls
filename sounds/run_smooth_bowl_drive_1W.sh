@@ -1,9 +1,12 @@
 #!/bin/bash
 set -e
 
-cd "$(dirname "$0")"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-source .venv/bin/activate
+cd "$REPO_ROOT"
+
+source "$REPO_ROOT/.venv/bin/activate"
 
 echo
 echo "============================================================"
