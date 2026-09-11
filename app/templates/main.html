@@ -1,254 +1,79 @@
 {% extends "base.html" %}
 
-{% block title %}
-Smart Sound Bowls
-{% endblock %}
-
+{% block title %}Smart Sound Bowls{% endblock %}
 
 {% block content %}
-
 <div class="page-heading">
+  <div>
+    <h1>Sound Bowl Dashboard</h1>
+    <p>Live overview for all bowls. Each bowl owns a portable hardware profile plus independent test settings.</p>
+  </div>
+  <button class="button button-stop" onclick="stopAllBowls()">STOP ALL</button>
+</div>
 
-    <div>
-        <h1>
-            Bowl Driver
-        </h1>
-
-        <p>
-            Main control and live system status.
-        </p>
+<div class="bowl-grid" id="bowl-grid">
+  {% for bowl_id, bowl in bowls.items() %}
+  <section class="card bowl-card" id="bowl-card-{{ bowl_id }}">
+    <div class="bowl-card-header">
+      <div>
+        <div class="card-title">{{ bowl.name|upper }}</div>
+        <div class="big-value" id="bowl-{{ bowl_id }}-state">{{ "RUNNING" if bowl.output_running else "READY" }}</div>
+      </div>
+      <span class="channel-pill" id="bowl-{{ bowl_id }}-channel">{{ bowl.hardware.driver_channel }}</span>
     </div>
 
+    <div class="metric"><span>Pattern</span><strong id="bowl-{{ bowl_id }}-pattern">{{ bowl.pattern }}</strong></div>
+    <div class="metric"><span>Frequency</span><strong id="bowl-{{ bowl_id }}-frequency">{{ "%.2f"|format(bowl.frequency_hz) }} Hz</strong></div>
+    <div class="metric"><span>Drive</span><strong id="bowl-{{ bowl_id }}-amplitude">{{ "%.3f"|format(bowl.amplitude * 100) }} %</strong></div>
+    <div class="metric"><span>Driver</span><strong id="bowl-{{ bowl_id }}-driver">{{ bowl.hardware.profile.driver.backend }}</strong></div>
+    <div class="metric"><span>Feedback</span><strong id="bowl-{{ bowl_id }}-feedback">{{ bowl.hardware.profile.feedback.backend }} {{ bowl.hardware.feedback_channel }}</strong></div>
+    <div class="metric"><span>Hardware profile</span><strong id="bowl-{{ bowl_id }}-profile">{{ bowl.hardware.profile.label }}</strong></div>
+    <div class="metric"><span>Resonance</span><strong id="bowl-{{ bowl_id }}-resonance">{{ "%.2f Hz"|format(bowl.resonance_frequency_hz) if bowl.resonance_frequency_hz else "--" }}</strong></div>
+
+    <div class="button-row">
+      <button class="button button-secondary" onclick="openBowlWindow({{ bowl_id }})">OPEN BOWL {{ bowl_id }}</button>
+      <button class="button button-start" onclick="startBowl({{ bowl_id }})">START</button>
+      <button class="button button-stop" onclick="stopBowl({{ bowl_id }})">STOP</button>
+    </div>
+  </section>
+  {% endfor %}
 </div>
 
-
-<div class="dashboard-grid">
-
-
-    <section class="card">
-
-        <div class="card-title">
-            OUTPUT
-        </div>
-
-        <div class="big-value" id="output-state">
-            {{ "RUNNING" if state.output_running else "STOPPED" }}
-        </div>
-
-        <div class="button-row">
-
-            <button
-                class="button button-start"
-                onclick="startAudio()"
-            >
-                START
-            </button>
-
-            <button
-                class="button button-stop"
-                onclick="stopAudio()"
-            >
-                STOP
-            </button>
-
-        </div>
-
-    </section>
-
-
-    <section class="card">
-
-        <div class="card-title">
-            DRIVE
-        </div>
-
-        <div class="metric">
-
-            <span>
-                Frequency
-            </span>
-
-            <strong id="frequency-value">
-                {{ "%.2f"|format(state.frequency_hz) }} Hz
-            </strong>
-
-        </div>
-
-
-        <div class="metric">
-
-            <span>
-                Amplitude
-            </span>
-
-            <strong id="amplitude-value">
-                {{ "%.1f"|format(state.amplitude * 100) }} %
-            </strong>
-
-        </div>
-
-
-        <div class="metric">
-
-            <span>
-                Waveform
-            </span>
-
-            <strong id="waveform-value">
-                {{ state.waveform }}
-            </strong>
-
-        </div>
-
-    </section>
-
-
-    <section class="card">
-
-        <div class="card-title">
-            BOWL FEEDBACK
-        </div>
-
-        <div class="metric">
-
-            <span>
-                Microphone
-            </span>
-
-            <strong id="mic-state">
-                {{ "ON" if state.mic_enabled else "OFF" }}
-            </strong>
-
-        </div>
-
-
-        <div class="metric">
-
-            <span>
-                Detected Frequency
-            </span>
-
-            <strong>
-                --
-            </strong>
-
-        </div>
-
-
-        <div class="metric">
-
-            <span>
-                Resonance
-            </span>
-
-            <strong>
-                --
-            </strong>
-
-        </div>
-
-    </section>
-
-
-    <section class="card">
-
-        <div class="card-title">
-            HARDWARE
-        </div>
-
-        <div class="metric">
-
-            <span>
-                Audio Backend
-            </span>
-
-            <strong>
-                {{ state.hardware_mode }}
-            </strong>
-
-        </div>
-
-
-        <div class="metric">
-
-            <span>
-                DAC
-            </span>
-
-            <strong>
-                PCM5122
-            </strong>
-
-        </div>
-
-
-        <div class="metric">
-
-            <span>
-                Microphone
-            </span>
-
-            <strong>
-                INMP441
-            </strong>
-
-        </div>
-
-    </section>
-
-
-</div>
-
-
-
+<section class="card utility-card">
+  <div class="card-title">SYSTEM ARCHITECTURE</div>
+  <div class="metric"><span>Configured bowls</span><strong>{{ bowls|length }} / 7</strong></div>
+  <div class="metric"><span>Hardware abstraction</span><strong>Per-bowl profiles</strong></div>
+  <div class="metric"><span>Current synthesis</span><strong>Profile controlled</strong></div>
+</section>
 {% endblock %}
 
-
 {% block scripts %}
-
 <script>
-
-async function startAudio() {
-
-    await apiPost("/api/audio/start");
-
-    await refreshState();
-
+function openBowlWindow(id) {
+  return openUtilityWindow(`/bowl/${id}`, `bowl_${id}`, 1120, 980);
 }
-
-
-async function stopAudio() {
-
-    await apiPost("/api/audio/stop");
-
-    await refreshState();
-
+async function startBowl(id) { await apiPost(`/api/bowls/${id}/start`); await refreshBowls(); }
+async function stopBowl(id) { await apiPost(`/api/bowls/${id}/stop`); await refreshBowls(); }
+async function stopAllBowls() { await apiPost('/api/bowls/stop-all'); await refreshBowls(); }
+async function refreshBowls() {
+  const response = await fetch('/api/bowls');
+  const result = await response.json();
+  if (!result.ok) return;
+  Object.entries(result.bowls).forEach(([id, bowl]) => {
+    const hw = bowl.hardware;
+    document.getElementById(`bowl-${id}-state`).textContent = bowl.output_running ? 'RUNNING' : 'READY';
+    document.getElementById(`bowl-${id}-pattern`).textContent = bowl.pattern;
+    document.getElementById(`bowl-${id}-frequency`).textContent = Number(bowl.frequency_hz).toFixed(2) + ' Hz';
+    document.getElementById(`bowl-${id}-amplitude`).textContent = (Number(bowl.amplitude) * 100).toFixed(3) + ' %';
+    document.getElementById(`bowl-${id}-channel`).textContent = hw.driver_channel;
+    document.getElementById(`bowl-${id}-driver`).textContent = hw.profile.driver.backend;
+    document.getElementById(`bowl-${id}-feedback`).textContent = `${hw.profile.feedback.backend} ${hw.feedback_channel}`;
+    document.getElementById(`bowl-${id}-profile`).textContent = hw.profile.label;
+    document.getElementById(`bowl-${id}-resonance`).textContent = bowl.resonance_frequency_hz == null ? '--' : Number(bowl.resonance_frequency_hz).toFixed(2) + ' Hz';
+    document.getElementById(`bowl-card-${id}`).classList.toggle('running', bowl.output_running);
+  });
 }
-
-
-async function refreshState() {
-
-    const response = await fetch("/api/state");
-
-    const state = await response.json();
-
-    document.getElementById("output-state").textContent =
-        state.output_running ? "RUNNING" : "STOPPED";
-
-    document.getElementById("frequency-value").textContent =
-        Number(state.frequency_hz).toFixed(2) + " Hz";
-
-    document.getElementById("amplitude-value").textContent =
-        (Number(state.amplitude) * 100).toFixed(1) + " %";
-
-    document.getElementById("waveform-value").textContent =
-        state.waveform;
-
-}
-
-
-setInterval(refreshState, 1000);
-
+setInterval(refreshBowls, 750);
+refreshBowls();
 </script>
-
 {% endblock %}

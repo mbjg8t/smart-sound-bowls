@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block title %}{{ bowl.name }} - Smart Sound Bowls{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+  <div>
+    <h1>{{ bowl.name }} Test Bench</h1>
+    <p id="hardware-summary">{{ bowl.hardware.profile.label }} · {{ bowl.hardware.driver_channel }} · feedback {{ bowl.hardware.feedback_channel }}</p>
+  </div>
+  <div class="window-status"><span class="status-dot"></span><strong id="run-state">{{ "RUNNING" if bowl.output_running else "READY" }}</strong></div>
+</div>
+
+<div class="bowl-workspace">
+  <section class="card control-panel-wide">
+    <div class="card-title">DRIVE / PATTERN</div>
+    <div class="form-grid">
+      <div><label>Pattern</label><select id="pattern"><option value="strike">Strike</option><option value="continuous">Continuous</option><option value="chirp">Chirp</option><option value="wah">Wah</option><option value="pulse">Pulse / On-Off</option></select></div>
+      <div><label>Waveform</label><select id="waveform"><option value="sine">Sine</option><option value="square">Square</option><option value="triangle">Triangle</option><option value="saw">Saw</option></select></div>
+      <div><label>Frequency (Hz)</label><input id="frequency_hz" type="number" step="0.1" min="10" max="5000"></div>
+      <div><label>Drive amplitude</label><input id="amplitude" type="number" step="0.0001" min="0"></div>
+      <div><label>Attack (s)</label><input id="attack_s" type="number" step="0.1" min="0"></div>
+      <div><label>Hold / On (s)</label><input id="hold_s" type="number" step="0.1" min="0"></div>
+      <div><label>Release (s)</label><input id="release_s" type="number" step="0.1" min="0"></div>
+      <div><label>Rest / Ringdown (s)</label><input id="rest_s" type="number" step="0.1" min="0"></div>
+      <div><label>Repeats</label><input id="repeats" type="number" step="1" min="1" max="100"></div>
+      <div><label>Chirp span (Hz)</label><input id="chirp_span_hz" type="number" step="0.1"></div>
+      <div><label>Wah depth (Hz)</label><input id="wah_depth_hz" type="number" step="0.1"></div>
+      <div><label>Wah rate (Hz)</label><input id="wah_rate_hz" type="number" step="0.01"></div>
+    </div>
+    <div class="button-row bowl-actions">
+      <button class="button button-secondary" onclick="applySettings()">APPLY</button>
+      <button class="button button-start" onclick="startTest()">START TEST</button>
+      <button class="button button-stop" onclick="stopTest()">STOP</button>
+    </div>
+    <div class="message" id="message">Ready.</div>
+  </section>
+
+  <aside class="card live-panel">
+    <div class="card-title">LIVE BOWL STATUS</div>
+    <div class="metric"><span>Output</span><strong id="live-output">{{ bowl.hardware.driver_channel }}</strong></div>
+    <div class="metric"><span>Pattern</span><strong id="live-pattern">{{ bowl.pattern }}</strong></div>
+    <div class="metric"><span>Frequency</span><strong id="live-frequency">{{ bowl.frequency_hz }} Hz</strong></div>
+    <div class="metric"><span>Drive</span><strong id="live-drive">{{ bowl.amplitude * 100 }} %</strong></div>
+    <div class="metric"><span>Piezo level</span><strong id="live-piezo">--</strong></div>
+    <div class="metric"><span>Detected freq.</span><strong id="live-detected">--</strong></div>
+    <div class="metric"><span>Resonance</span><strong id="live-resonance">--</strong></div>
+    <div class="metric"><span>Hardware</span><strong id="live-hardware">{{ bowl.hardware.profile.label }}</strong></div>
+  </aside>
+</div>
+
+<section class="card" style="margin-top: 18px;">
+  <div class="card-title">BOWL HARDWARE CONFIGURATION</div>
+  <p>Hardware identity is persisted separately from test parameters. Change this when a driver, amp, exciter, synthesizer, or pickup is replaced.</p>
+  <div class="form-grid">
+    <div><label>Bowl name</label><input id="hw-name" type="text"></div>
+    <div><label>Hardware profile</label><select id="hw-profile"></select></div>
+    <div><label>Driver output / channel</label><input id="hw-driver-channel" type="text" placeholder="LEFT, RIGHT, CH1..."></div>
+    <div><label>Feedback channel</label><input id="hw-feedback-channel" type="text" placeholder="CH1, CH2..."></div>
+    <div><label>Calibrated resonance (Hz)</label><input id="hw-resonance" type="number" step="0.1"></div>
+    <div><label>Preferred drive</label><input id="hw-preferred-drive" type="number" step="0.0001" min="0"></div>
+    <div><label>Maximum drive</label><input id="hw-max-drive" type="number" step="0.0001" min="0"></div>
+    <div><label>Feedback scale</label><input id="hw-feedback-scale" type="number" step="0.01"></div>
+    <div style="grid-column: 1 / -1;"><label>Hardware notes</label><input id="hw-notes" type="text"></div>
+  </div>
+  <div class="button-row bowl-actions">
+    <button class="button button-secondary" onclick="saveHardware()">SAVE HARDWARE CONFIG</button>
+  </div>
+  <div class="message" id="hardware-message">Hardware configuration loaded.</div>
+  <div class="metric"><span>Driver backend</span><strong id="hw-driver-backend">--</strong></div>
+  <div class="metric"><span>Feedback backend</span><strong id="hw-feedback-backend">--</strong></div>
+  <div class="metric"><span>Amplifier</span><strong id="hw-amplifier">--</strong></div>
+  <div class="metric"><span>Exciter</span><strong id="hw-exciter">--</strong></div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const BOWL_ID = {{ bowl.bowl_id }};
+const fields = ['pattern','waveform','frequency_hz','amplitude','attack_s','hold_s','release_s','rest_s','repeats','chirp_span_hz','wah_depth_hz','wah_rate_hz'];
+let editing = false;
+let hardwareEditing = false;
+let profiles = {};
+
+function loadForm(bowl) {
+  if (!editing) fields.forEach(key => { const el = document.getElementById(key); if (el && bowl[key] != null) el.value = bowl[key]; });
+  if (!hardwareEditing) loadHardwareForm(bowl.hardware);
+}
+function payload() { const data = {}; fields.forEach(key => data[key] = document.getElementById(key).value); return data; }
+async function applySettings() {
+  const result = await apiPost(`/api/bowls/${BOWL_ID}/configure`, payload());
+  const msg = document.getElementById('message');
+  if (!result.ok) { msg.textContent = result.error || 'Apply failed'; return false; }
+  msg.textContent = 'Settings applied.'; updateLive(result.bowl); return true;
+}
+async function startTest() { if (!(await applySettings())) return; const result = await apiPost(`/api/bowls/${BOWL_ID}/start`); if (result.ok) { document.getElementById('message').textContent = 'Test started.'; updateLive(result.bowl); } }
+async function stopTest() { const result = await apiPost(`/api/bowls/${BOWL_ID}/stop`); if (result.ok) { document.getElementById('message').textContent = 'Stopped.'; updateLive(result.bowl); } }
+function fmt(v, digits=2, suffix='') { return v == null ? '--' : Number(v).toFixed(digits) + suffix; }
+function updateLive(bowl) {
+  const hw = bowl.hardware;
+  document.getElementById('run-state').textContent = bowl.output_running ? 'RUNNING' : 'READY';
+  document.getElementById('live-output').textContent = hw.driver_channel;
+  document.getElementById('live-pattern').textContent = bowl.pattern;
+  document.getElementById('live-frequency').textContent = fmt(bowl.frequency_hz, 2, ' Hz');
+  document.getElementById('live-drive').textContent = fmt(bowl.amplitude * 100, 3, ' %');
+  document.getElementById('live-piezo').textContent = fmt(bowl.piezo_level, 3);
+  document.getElementById('live-detected').textContent = fmt(bowl.detected_frequency_hz, 2, ' Hz');
+  document.getElementById('live-resonance').textContent = fmt(bowl.resonance_frequency_hz, 2, ' Hz');
+  document.getElementById('live-hardware').textContent = hw.profile.label;
+  document.getElementById('hardware-summary').textContent = `${hw.profile.label} · ${hw.driver_channel} · feedback ${hw.feedback_channel}`;
+  document.getElementById('amplitude').max = hw.calibration.max_drive;
+  renderHardwareDetails(hw);
+}
+async function loadProfiles() {
+  const response = await fetch('/api/hardware-profiles'); const result = await response.json(); if (!result.ok) return;
+  profiles = result.profiles; const select = document.getElementById('hw-profile'); select.innerHTML = '';
+  Object.entries(profiles).forEach(([key, profile]) => { const option = document.createElement('option'); option.value = key; option.textContent = profile.label; select.appendChild(option); });
+}
+function loadHardwareForm(hw) {
+  document.getElementById('hw-name').value = hw.name || '';
+  document.getElementById('hw-profile').value = hw.hardware_profile;
+  document.getElementById('hw-driver-channel').value = hw.driver_channel || '';
+  document.getElementById('hw-feedback-channel').value = hw.feedback_channel || '';
+  document.getElementById('hw-resonance').value = hw.calibration.resonance_hz ?? '';
+  document.getElementById('hw-preferred-drive').value = hw.calibration.preferred_drive ?? '';
+  document.getElementById('hw-max-drive').value = hw.calibration.max_drive ?? '';
+  document.getElementById('hw-feedback-scale').value = hw.calibration.feedback_scale ?? '';
+  document.getElementById('hw-notes').value = hw.notes || '';
+}
+function renderHardwareDetails(hw) {
+  document.getElementById('hw-driver-backend').textContent = hw.profile.driver.backend + ' · ' + (hw.profile.driver.device || '');
+  document.getElementById('hw-feedback-backend').textContent = hw.profile.feedback.backend + ' · ' + (hw.profile.feedback.device || '');
+  document.getElementById('hw-amplifier').textContent = hw.profile.amplifier.description || hw.profile.amplifier.type;
+  document.getElementById('hw-exciter').textContent = hw.profile.exciter.description || hw.profile.exciter.type;
+}
+async function saveHardware() {
+  const data = {
+    name: document.getElementById('hw-name').value,
+    hardware_profile: document.getElementById('hw-profile').value,
+    driver_channel: document.getElementById('hw-driver-channel').value,
+    feedback_channel: document.getElementById('hw-feedback-channel').value,
+    notes: document.getElementById('hw-notes').value,
+    calibration: {
+      resonance_hz: document.getElementById('hw-resonance').value,
+      preferred_drive: document.getElementById('hw-preferred-drive').value,
+      max_drive: document.getElementById('hw-max-drive').value,
+      feedback_scale: document.getElementById('hw-feedback-scale').value
+    }
+  };
+  const result = await apiPost(`/api/bowls/${BOWL_ID}/hardware`, data);
+  const msg = document.getElementById('hardware-message');
+  if (!result.ok) { msg.textContent = result.error || 'Hardware save failed'; return; }
+  msg.textContent = 'Hardware configuration saved to config/bowls.json.'; hardwareEditing = false; loadHardwareForm(result.bowl.hardware); updateLive(result.bowl);
+}
+async function refresh() { const response = await fetch(`/api/bowls/${BOWL_ID}`); const result = await response.json(); if (!result.ok) return; loadForm(result.bowl); updateLive(result.bowl); }
+document.querySelectorAll('input,select').forEach(el => {
+  if (el.id.startsWith('hw-')) { el.addEventListener('focus', () => hardwareEditing = true); el.addEventListener('blur', () => setTimeout(() => hardwareEditing = false, 150)); }
+  else { el.addEventListener('focus', () => editing = true); el.addEventListener('blur', () => editing = false); }
+});
+(async () => { await loadProfiles(); await refresh(); })();
+setInterval(refresh, 750);
+</script>
+{% endblock %}

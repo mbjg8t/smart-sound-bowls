@@ -1,0 +1,64 @@
+{
+  "prototype_pcm5122_teensy": {
+    "label": "Prototype - PCM5122 + Teensy Piezo",
+    "driver": {
+      "backend": "pi_pcm5122",
+      "device": "default",
+      "description": "Raspberry Pi synthesizes audio through PCM5122"
+    },
+    "feedback": {
+      "backend": "teensy_piezo",
+      "device": "/dev/ttyACM0",
+      "description": "Teensy ADC reads bowl piezo pickup"
+    },
+    "amplifier": {
+      "type": "prototype_1w",
+      "description": "Current 1 W prototype amplifier"
+    },
+    "exciter": {
+      "type": "1w_speaker",
+      "description": "Current 1 W bowl driver / speaker"
+    },
+    "capabilities": {
+      "frequency": true,
+      "amplitude": true,
+      "waveform": true,
+      "envelope": true,
+      "chirp": true,
+      "wah": true,
+      "feedback_level": true,
+      "feedback_frequency": true
+    }
+  },
+  "future_teensy_synth": {
+    "label": "Future - Teensy Synth + Piezo",
+    "driver": {
+      "backend": "teensy_synth",
+      "device": "/dev/ttyACM0",
+      "description": "Teensy generates bowl drive waveform locally"
+    },
+    "feedback": {
+      "backend": "teensy_piezo",
+      "device": "/dev/ttyACM0",
+      "description": "Teensy reads piezo feedback locally"
+    },
+    "amplifier": {
+      "type": "compact_amp",
+      "description": "Future compact amplifier"
+    },
+    "exciter": {
+      "type": "tbd",
+      "description": "Future bowl driver"
+    },
+    "capabilities": {
+      "frequency": true,
+      "amplitude": true,
+      "waveform": true,
+      "envelope": true,
+      "chirp": true,
+      "wah": true,
+      "feedback_level": true,
+      "feedback_frequency": true
+    }
+  }
+}

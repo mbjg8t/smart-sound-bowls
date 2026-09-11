@@ -14,43 +14,84 @@ def state():
     return jsonify(controller().get_state())
 
 
+@api_bp.get("/bowls")
+def bowls_state():
+    return jsonify({"ok": True, "bowls": controller().get_state()})
+
+
+@api_bp.get("/bowls/<int:bowl_id>")
+def bowl_state(bowl_id):
+    try:
+        return jsonify({"ok": True, "bowl": controller().get_state(bowl_id)})
+    except KeyError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+
+
+@api_bp.get("/hardware-profiles")
+def hardware_profiles():
+    return jsonify({"ok": True, "profiles": controller().get_hardware_profiles()})
+
+
+@api_bp.post("/bowls/<int:bowl_id>/hardware")
+def bowl_hardware_configure(bowl_id):
+    data = request.get_json(silent=True) or {}
+    try:
+        bowl = controller().configure_hardware(bowl_id, **data)
+        return jsonify({"ok": True, "bowl": bowl})
+    except (ValueError, TypeError, KeyError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@api_bp.post("/bowls/<int:bowl_id>/configure")
+def bowl_configure(bowl_id):
+    data = request.get_json(silent=True) or {}
+    try:
+        bowl = controller().configure_bowl(bowl_id, **data)
+        return jsonify({"ok": True, "bowl": bowl})
+    except (ValueError, TypeError, KeyError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@api_bp.post("/bowls/<int:bowl_id>/start")
+def bowl_start(bowl_id):
+    try:
+        return jsonify({"ok": True, "bowl": controller().start_bowl(bowl_id)})
+    except KeyError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+
+
+@api_bp.post("/bowls/<int:bowl_id>/stop")
+def bowl_stop(bowl_id):
+    try:
+        return jsonify({"ok": True, "bowl": controller().stop_bowl(bowl_id)})
+    except KeyError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+
+
+@api_bp.post("/bowls/stop-all")
+def bowls_stop_all():
+    return jsonify({"ok": True, "bowls": controller().stop_all()})
+
+
+# Legacy single-bowl endpoints remain for existing utility pages.
 @api_bp.post("/audio/configure")
 def audio_configure():
     data = request.get_json(silent=True) or {}
-
     try:
-        state = controller().configure_audio(
-            frequency_hz=data.get("frequency_hz"),
-            amplitude=data.get("amplitude"),
-            waveform=data.get("waveform"),
-        )
-
-        return jsonify({
-            "ok": True,
-            "state": state,
-        })
-
+        bowl = controller().configure_bowl(1, **data)
+        return jsonify({"ok": True, "state": bowl})
     except (ValueError, TypeError) as exc:
-        return jsonify({
-            "ok": False,
-            "error": str(exc),
-        }), 400
+        return jsonify({"ok": False, "error": str(exc)}), 400
 
 
 @api_bp.post("/audio/start")
 def audio_start():
-    return jsonify({
-        "ok": True,
-        "state": controller().start_audio(),
-    })
+    return jsonify({"ok": True, "state": controller().start_bowl(1)})
 
 
 @api_bp.post("/audio/stop")
 def audio_stop():
-    return jsonify({
-        "ok": True,
-        "state": controller().stop_audio(),
-    })
+    return jsonify({"ok": True, "state": controller().stop_bowl(1)})
 
 
 # ============================================================

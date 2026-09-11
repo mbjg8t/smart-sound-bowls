@@ -489,3 +489,54 @@ select:focus {
 .utility-submenu:hover > .utility-submenu-content {
     display: block;
 }
+
+/* ==========================================================
+   Multi-bowl dashboard / bowl workspaces
+   ========================================================== */
+.bowl-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(320px, 1fr));
+    gap: 18px;
+}
+
+.bowl-card { transition: border-color .15s, box-shadow .15s; }
+.bowl-card.running {
+    border-color: var(--green);
+    box-shadow: 0 0 0 1px rgba(63,185,80,.15), 0 8px 30px rgba(0,0,0,.18);
+}
+.bowl-card-header,
+.window-status {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+.channel-pill {
+    padding: 5px 9px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 700;
+}
+.bowl-workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+    gap: 18px;
+    align-items: start;
+}
+.control-panel-wide { min-width: 0; }
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
+    gap: 4px 16px;
+}
+.bowl-actions { margin-top: 24px; }
+.live-panel { position: sticky; top: 18px; }
+
+@media (max-width: 850px) {
+    .bowl-grid,
+    .bowl-workspace,
+    .form-grid { grid-template-columns: 1fr; }
+    .live-panel { position: static; }
+}

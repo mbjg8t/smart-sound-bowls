@@ -1,0 +1,28 @@
+{
+  "1": {
+    "name": "Bowl 1",
+    "hardware_profile": "prototype_pcm5122_teensy",
+    "driver_channel": "LEFT",
+    "feedback_channel": "CH1",
+    "notes": "Current prototype bowl 1",
+    "calibration": {
+      "resonance_hz": 528.7,
+      "preferred_drive": 0.0007,
+      "max_drive": 0.10,
+      "feedback_scale": 1.0
+    }
+  },
+  "2": {
+    "name": "Bowl 2",
+    "hardware_profile": "prototype_pcm5122_teensy",
+    "driver_channel": "RIGHT",
+    "feedback_channel": "CH2",
+    "notes": "Current prototype bowl 2",
+    "calibration": {
+      "resonance_hz": null,
+      "preferred_drive": 0.0007,
+      "max_drive": 0.10,
+      "feedback_scale": 1.0
+    }
+  }
+}
